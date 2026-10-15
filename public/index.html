@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f6f2">
+    <title>CRM - Música de los Ríos | Cañaveral</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Música de los Ríos, inicio">
+          <span class="brand-mark" aria-hidden="true">♪</span>
+          <span class="brand-name">Música de los Ríos</span>
+        </a>
+        <span class="location-label"><span class="status-dot" aria-hidden="true"></span> Cañaveral</span>
+      </header>
+
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">GESTIÓN DE ALUMNOS</p>
+        <h1 id="page-title">CRM - Música de los Ríos <span>| Cañaveral</span></h1>
+        <p class="intro-copy">Un espacio sencillo para organizar las personas interesadas en aprender música.</p>
+      </section>
+
+      <section class="panel form-panel" aria-labelledby="form-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">GESTIÓN DE CONTACTO</p>
+            <h2 id="form-title">Añadir un lead</h2>
+          </div>
+          <span class="heading-icon" aria-hidden="true">＋</span>
+        </div>
+        <form id="lead-form">
+          <div class="form-fields">
+            <label class="field">
+              <span>Nombre <span class="required">*</span></span>
+              <input id="nombre" name="nombre" type="text" placeholder="Nombre y apellidos" autocomplete="name" required>
+            </label>
+            <label class="field">
+              <span>Estado del lead</span>
+              <select id="estado" name="estado"></select>
+            </label>
+            <label class="field">
+              <span>Instrumento</span>
+              <select id="instrumento" name="instrumento"><option value="">Seleccionar instrumento</option></select>
+            </label>
+            <label class="field">
+              <span>Nivel</span>
+              <select id="nivel" name="nivel"><option value="">Seleccionar nivel</option></select>
+            </label>
+            <label class="field">
+              <span>Asignado a</span>
+              <input id="asignadoA" name="asignadoA" type="text" placeholder="Persona responsable">
+            </label>
+            <label class="field">
+              <span>Teléfono</span>
+              <input id="telefono" name="telefono" type="tel" placeholder="600 123 123" autocomplete="tel">
+            </label>
+            <label class="field">
+              <span>Email <span class="required">*</span></span>
+              <input id="email" name="email" type="email" placeholder="nombre@ejemplo.com" autocomplete="email" required>
+            </label>
+            <label class="field">
+              <span>Edad</span>
+              <input id="edad" name="edad" type="number" min="0" step="1" placeholder="Edad">
+            </label>
+            <label class="field field-wide">
+              <span>Conversación</span>
+              <textarea id="conversacion" name="conversacion" rows="2" placeholder="Notas sobre la conversación"></textarea>
+            </label>
+            <div class="form-actions">
+              <div class="edit-actions">
+                <button id="cancel-edit-button" class="button-secondary" type="button" hidden>Cancelar</button>
+                <button id="submit-button" class="button-primary" type="submit">Guardar lead <span aria-hidden="true">↗</span></button>
+              </div>
+            </div>
+          </div>
+          <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="leads-section" aria-labelledby="leads-title">
+        <div class="section-heading leads-heading">
+          <div>
+            <p class="eyebrow">SEGUIMIENTO</p>
+            <h2 id="leads-title">Leads recibidos <span id="lead-count" class="count-badge">0</span></h2>
+          </div>
+          <div class="leads-actions">
+            <button id="export-button" class="button-secondary" type="button"><span aria-hidden="true">↓</span> Descargar CSV</button>
+            <button id="refresh-button" class="button-text" type="button"><span aria-hidden="true">↻</span> Actualizar</button>
+          </div>
+        </div>
+        <div class="panel table-panel">
+          <div class="lead-filters" aria-label="Filtros de leads">
+            <label class="filter-field filter-search">
+              <span>Buscar</span>
+              <input id="lead-search" type="search" placeholder="Nombre o email" autocomplete="off">
+            </label>
+            <label class="filter-field">
+              <span>Instrumento</span>
+              <select id="instrument-filter">
+                <option value="">Todos los instrumentos</option>
+              </select>
+            </label>
+            <label class="filter-field">
+              <span>Estado</span>
+              <select id="status-filter">
+                <option value="">Todos los estados</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-summary" aria-live="polite">
+            <span>Leads visibles</span>
+            <strong id="visible-lead-count">0</strong>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Instrumento</th>
+                  <th scope="col">Nivel</th>
+                  <th scope="col">Asignado a</th>
+                  <th scope="col">Teléfono</th>
+                  <th scope="col">Edad</th>
+                  <th scope="col">Conversación</th>
+                  <th scope="col">Fecha de alta</th>
+                  <th scope="col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="leads-table-body"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="empty-state" hidden>
+            <span class="empty-icon" aria-hidden="true">♫</span>
+            <h3>Aún no hay leads</h3>
+            <p>Cuando añadas un contacto, aparecerá aquí.</p>
+          </div>
+          <p id="list-message" class="list-message" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <footer>Hecho para acompañar cada nuevo comienzo musical.</footer>
+    </main>
+  </body>
+</html>

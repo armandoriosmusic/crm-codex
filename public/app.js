@@ -1,0 +1,277 @@
+const form = document.querySelector('#lead-form');
+const nameInput = document.querySelector('#nombre');
+const emailInput = document.querySelector('#email');
+const estadoInput = document.querySelector('#estado');
+const instrumentoInput = document.querySelector('#instrumento');
+const nivelInput = document.querySelector('#nivel');
+const submitButton = document.querySelector('#submit-button');
+const formMessage = document.querySelector('#form-message');
+const tableBody = document.querySelector('#leads-table-body');
+const emptyState = document.querySelector('#empty-state');
+const leadCount = document.querySelector('#lead-count');
+const listMessage = document.querySelector('#list-message');
+const refreshButton = document.querySelector('#refresh-button');
+const formTitle = document.querySelector('#form-title');
+const cancelEditButton = document.querySelector('#cancel-edit-button');
+const leadSearchInput = document.querySelector('#lead-search');
+const instrumentFilter = document.querySelector('#instrument-filter');
+const statusFilter = document.querySelector('#status-filter');
+const visibleLeadCount = document.querySelector('#visible-lead-count');
+const exportButton = document.querySelector('#export-button');
+let editingLeadId = null;
+let allLeads = [];
+
+function addCell(row, value) {
+  const cell = document.createElement('td');
+  cell.textContent = value;
+  row.append(cell);
+  return cell;
+}
+
+function addTagCell(row, value, type) {
+  const cell = document.createElement('td');
+  if (!value) {
+    cell.textContent = '—';
+  } else {
+    const tag = document.createElement('span');
+    tag.className = `data-tag ${type}-tag tag-${slugify(value)}`;
+    tag.textContent = value;
+    cell.append(tag);
+  }
+  row.append(cell);
+}
+
+function slugify(value) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+async function readResponse(response) {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) return response.json();
+  const body = await response.text();
+  throw new Error(response.ok
+    ? 'El servidor devolvió una respuesta no válida.'
+    : `El servidor no tiene disponible esta operación (${response.status}). Reinicia el backend.`);
+}
+
+function startEditing(lead) {
+  editingLeadId = lead.id;
+  formTitle.textContent = 'Editar lead';
+  nameInput.value = lead.nombre || '';
+  emailInput.value = lead.email || '';
+  estadoInput.value = lead.estado || 'No contesta';
+  instrumentoInput.value = lead.instrumento || '';
+  nivelInput.value = lead.nivel || '';
+  form.elements.asignadoA.value = lead.asignadoA || '';
+  form.elements.telefono.value = lead.telefono || '';
+  form.elements.edad.value = lead.edad ?? '';
+  form.elements.conversacion.value = lead.conversacion || '';
+  submitButton.innerHTML = 'Guardar cambios <span aria-hidden="true">↗</span>';
+  cancelEditButton.hidden = false;
+  formMessage.textContent = 'Editando este lead.';
+  formMessage.classList.remove('error');
+  nameInput.focus();
+  window.scrollTo({ top: form.closest('.panel').offsetTop - 20, behavior: 'smooth' });
+}
+
+function cancelEditing() {
+  editingLeadId = null;
+  form.reset();
+  formTitle.textContent = 'Añadir un lead';
+  submitButton.innerHTML = 'Guardar lead <span aria-hidden="true">↗</span>';
+  cancelEditButton.hidden = true;
+  formMessage.textContent = '';
+  formMessage.classList.remove('error', 'success');
+}
+
+function filterLeads() {
+  const search = leadSearchInput.value.trim().toLocaleLowerCase('es');
+  const instrument = instrumentFilter.value;
+  const status = statusFilter.value;
+
+  return allLeads.filter((lead) => {
+    const matchesSearch = !search
+      || [lead.nombre, lead.email].some((value) => (value || '').toLocaleLowerCase('es').includes(search));
+    const matchesInstrument = !instrument || lead.instrumento === instrument;
+    const matchesStatus = !status || (lead.estado || 'No contesta') === status;
+    return matchesSearch && matchesInstrument && matchesStatus;
+  });
+}
+
+function renderLeads(leads) {
+  tableBody.replaceChildren();
+  leadCount.textContent = String(leads.length);
+  visibleLeadCount.textContent = String(leads.length);
+  emptyState.hidden = leads.length > 0;
+  emptyState.querySelector('h3').textContent = allLeads.length && !leads.length ? 'No hay coincidencias' : 'Aún no hay leads';
+  emptyState.querySelector('p').textContent = allLeads.length && !leads.length
+    ? 'Prueba a cambiar o limpiar los filtros.'
+    : 'Cuando añadas un contacto, aparecerá aquí.';
+
+  for (const lead of leads) {
+    const row = document.createElement('tr');
+    addCell(row, lead.nombre || '—');
+
+    const emailCell = document.createElement('td');
+    if (lead.email) {
+      const emailLink = document.createElement('a');
+      emailLink.href = `mailto:${lead.email}`;
+      emailLink.textContent = lead.email;
+      emailCell.append(emailLink);
+    } else {
+      emailCell.textContent = '—';
+    }
+    row.append(emailCell);
+
+    const stateCell = document.createElement('td');
+    const statePill = document.createElement('span');
+    statePill.className = `state-pill tag-${slugify(lead.estado || 'No contesta')}`;
+    statePill.textContent = lead.estado || 'No contesta';
+    stateCell.append(statePill);
+    row.append(stateCell);
+
+    addTagCell(row, lead.instrumento, 'instrumento');
+    addTagCell(row, lead.nivel, 'nivel');
+    addCell(row, lead.asignadoA || '—');
+    addCell(row, lead.telefono || '—');
+    addCell(row, lead.edad === null || lead.edad === undefined ? '—' : String(lead.edad));
+    addCell(row, lead.conversacion || '—');
+
+    const date = lead.creadoEn ? new Date(lead.creadoEn) : null;
+    addCell(row, date && !Number.isNaN(date.getTime())
+      ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
+      : '—');
+
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'actions-cell';
+    const editButton = document.createElement('button');
+    editButton.className = 'row-action edit-action';
+    editButton.type = 'button';
+    editButton.textContent = 'Editar';
+    editButton.addEventListener('click', () => startEditing(lead));
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'row-action delete-action';
+    deleteButton.type = 'button';
+    deleteButton.textContent = 'Eliminar';
+    deleteButton.addEventListener('click', () => deleteLead(lead));
+    actionsCell.append(editButton, deleteButton);
+    row.append(actionsCell);
+    tableBody.append(row);
+  }
+}
+
+async function deleteLead(lead) {
+  if (!window.confirm(`¿Eliminar el lead de ${lead.nombre}?`)) return;
+  listMessage.textContent = '';
+  try {
+    const response = await fetch(`/leads/${lead.id}`, { method: 'DELETE' });
+    const result = await readResponse(response);
+    if (!response.ok) throw new Error(result.error || 'No se pudo eliminar el lead.');
+    if (editingLeadId === lead.id) cancelEditing();
+    await loadLeads();
+    listMessage.textContent = 'Lead eliminado correctamente.';
+  } catch (error) {
+    listMessage.textContent = error.message || 'No se pudo conectar con el servidor.';
+    listMessage.classList.add('error');
+  }
+}
+
+async function loadOptions() {
+  try {
+    const response = await fetch('/options');
+    if (!response.ok) throw new Error('No se pudieron cargar las opciones.');
+    const options = await response.json();
+
+    for (const estado of options.estados || []) {
+      const option = document.createElement('option');
+      option.value = estado;
+      option.textContent = estado;
+      estadoInput.append(option);
+
+      statusFilter.append(option.cloneNode(true));
+    }
+    for (const [input, values] of [[instrumentoInput, options.instrumentos], [nivelInput, options.niveles]]) {
+      for (const value of values || []) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        input.append(option);
+        if (input === instrumentoInput) instrumentFilter.append(option.cloneNode(true));
+      }
+    }
+  } catch (error) {
+    formMessage.textContent = error.message || 'No se pudieron cargar las opciones.';
+    formMessage.classList.add('error');
+  }
+}
+
+async function loadLeads() {
+  listMessage.textContent = '';
+  listMessage.classList.remove('error');
+  refreshButton.disabled = true;
+
+  try {
+    const response = await fetch('/leads');
+    if (!response.ok) throw new Error('No se pudo cargar la lista de leads.');
+    allLeads = await response.json();
+    renderLeads(filterLeads());
+  } catch (error) {
+    listMessage.textContent = error.message || 'No se pudo conectar con el servidor.';
+    listMessage.classList.add('error');
+  } finally {
+    refreshButton.disabled = false;
+  }
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  formMessage.textContent = '';
+  formMessage.classList.remove('error', 'success');
+  submitButton.disabled = true;
+  submitButton.textContent = 'Guardando…';
+
+  try {
+    const response = await fetch(editingLeadId ? `/leads/${editingLeadId}` : '/leads', {
+      method: editingLeadId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: nameInput.value.trim(),
+        email: emailInput.value.trim(),
+        estado: estadoInput.value,
+        instrumento: instrumentoInput.value || undefined,
+        nivel: nivelInput.value || undefined,
+        asignadoA: form.elements.asignadoA.value.trim(),
+        telefono: form.elements.telefono.value.trim(),
+        edad: form.elements.edad.value === '' ? undefined : Number(form.elements.edad.value),
+        conversacion: form.elements.conversacion.value.trim(),
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'No se pudo guardar el lead.');
+
+    const wasEditing = editingLeadId !== null;
+    cancelEditing();
+    formMessage.textContent = wasEditing ? 'Lead actualizado correctamente.' : 'Lead guardado correctamente.';
+    formMessage.classList.add('success');
+    await loadLeads();
+    nameInput.focus();
+  } catch (error) {
+    formMessage.textContent = error.message || 'No se pudo conectar con el servidor.';
+    formMessage.classList.add('error');
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = 'Guardar lead <span aria-hidden="true">↗</span>';
+  }
+});
+
+refreshButton.addEventListener('click', loadLeads);
+exportButton.addEventListener('click', () => {
+  window.location.href = '/leads/export.csv';
+});
+cancelEditButton.addEventListener('click', cancelEditing);
+leadSearchInput.addEventListener('input', () => renderLeads(filterLeads()));
+instrumentFilter.addEventListener('change', () => renderLeads(filterLeads()));
+statusFilter.addEventListener('change', () => renderLeads(filterLeads()));
+loadOptions();
+loadLeads();

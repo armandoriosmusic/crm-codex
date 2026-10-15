@@ -1,0 +1,172 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color-scheme: light;
+  --ink: #202723;
+  --muted: #7b827c;
+  --green: #335d49;
+  --green-dark: #274a38;
+  --green-pale: #eaf1eb;
+  --line: #e9e9e3;
+  --paper: #fff;
+  --canvas: #f7f6f2;
+  --gold: #d7a952;
+  font-family: 'DM Sans', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+button, input, select, textarea { font: inherit; }
+
+.page-shell {
+  width: min(100% - 48px, 1060px);
+  margin: 0 auto;
+}
+
+.topbar {
+  height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e8e7df;
+}
+
+.brand { display: inline-flex; align-items: center; gap: 11px; color: var(--ink); text-decoration: none; }
+.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--green); color: #fff; font-size: 23px; }
+.brand-name { font-family: Manrope, sans-serif; font-size: 15px; font-weight: 800; letter-spacing: -.4px; }
+.location-label { display: inline-flex; align-items: center; gap: 8px; color: #586159; font-size: 13px; font-weight: 600; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #70a47d; box-shadow: 0 0 0 3px #e2eee3; }
+
+.intro { padding: 53px 0 31px; }
+.eyebrow { margin: 0 0 9px; color: var(--green); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; }
+h1, h2, h3, p { margin-top: 0; }
+h1, h2, h3 { font-family: Manrope, sans-serif; }
+h1 { margin-bottom: 10px; font-size: clamp(24px, 4vw, 34px); line-height: 1.2; font-weight: 800; letter-spacing: -1.2px; }
+h1 span { color: #788078; font-weight: 500; }
+.intro-copy { margin: 0; color: var(--muted); font-size: 14px; }
+
+.panel { border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 8px 25px rgb(38 48 39 / 3%); }
+.form-panel { padding: 25px 27px 18px; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.section-heading .eyebrow { margin-bottom: 5px; }
+h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.45px; }
+.heading-icon { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 10px; background: var(--green-pale); color: var(--green); font-size: 21px; }
+.form-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 16px; margin-top: 22px; }
+.field { display: grid; gap: 8px; color: #424a44; font-size: 12px; font-weight: 600; }
+.required { color: #ad7257; }
+.field input, .field select, .field textarea { width: 100%; min-height: 43px; padding: 0 13px; border: 1px solid #dedfd8; border-radius: 8px; outline: none; background: #fff; color: var(--ink); font-size: 13px; transition: border-color .15s, box-shadow .15s; }
+.field select { padding-right: 30px; }
+.field textarea { min-height: 68px; padding-top: 11px; resize: vertical; }
+.field input::placeholder, .field textarea::placeholder { color: #a7aca7; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: #6c9277; box-shadow: 0 0 0 3px #e9f1eb; }
+.field-wide { grid-column: span 2; }
+.form-actions { display: flex; justify-content: flex-end; }
+.edit-actions { display: flex; align-items: center; gap: 9px; }
+.button-secondary { height: 43px; padding: 0 14px; border: 1px solid #dfe3dc; border-radius: 8px; background: #fff; color: #68736a; font-size: 12px; font-weight: 700; cursor: pointer; }
+.button-secondary:hover { border-color: #aebcaf; color: var(--green); }
+.button-primary { height: 43px; padding: 0 17px; border: 0; border-radius: 8px; background: var(--green); color: white; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s, transform .15s; }
+.button-primary:hover { background: var(--green-dark); transform: translateY(-1px); }
+.button-primary:disabled { cursor: wait; opacity: .7; transform: none; }
+.button-primary span { margin-left: 9px; color: #dbe9dd; font-size: 15px; }
+.form-message, .list-message { min-height: 16px; margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.form-message.error, .list-message.error { color: #a34838; }
+.form-message.success { color: var(--green); }
+
+.leads-section { margin-top: 37px; }
+.leads-heading { margin-bottom: 13px; }
+.leads-heading h2 { display: flex; align-items: center; gap: 9px; }
+.count-badge { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 20px; background: #eeeee8; color: #69716b; font: 600 11px 'DM Sans', sans-serif; }
+.button-text { padding: 7px 0 7px 10px; border: 0; background: transparent; color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; }
+.button-text:hover { color: var(--green-dark); }
+.button-text span { margin-right: 4px; font-size: 16px; vertical-align: -1px; }
+.table-panel { overflow: hidden; padding: 0 20px; }
+.lead-filters { display: grid; grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(180px, 1fr)); gap: 12px; padding: 18px 0 13px; border-bottom: 1px solid var(--line); }
+.filter-field { display: grid; gap: 7px; color: #68716a; font-size: 11px; font-weight: 700; }
+.filter-field input, .filter-field select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid #dedfd8; border-radius: 8px; outline: none; background: #fff; color: var(--ink); font-size: 12px; font-weight: 400; }
+.filter-field input::placeholder { color: #a7aca7; }
+.filter-field input:focus, .filter-field select:focus { border-color: #6c9277; box-shadow: 0 0 0 3px #e9f1eb; }
+.filter-summary { display: flex; align-items: center; gap: 7px; padding: 13px 0 3px; color: var(--muted); font-size: 11px; }
+.filter-summary strong { color: var(--green); font-size: 12px; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+thead { color: #858b85; }
+th { height: 48px; border-bottom: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: .75px; text-transform: uppercase; }
+td { height: 58px; border-bottom: 1px solid #f0f0eb; color: #4b534d; font-size: 12px; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { color: var(--ink); font-weight: 600; }
+td a { color: var(--green); text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.state-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 20px; background: var(--green-pale); color: var(--green); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.state-pill::before { width: 5px; height: 5px; border-radius: 50%; background: #70a47d; content: ''; }
+.state-pill.tag-no-contesta { background: #f0f1ef; color: #69716b; }
+.state-pill.tag-no-contesta::before { background: #969e97; }
+.state-pill.tag-en-contacto { background: #e5f0fb; color: #3f6d99; }
+.state-pill.tag-en-contacto::before { background: #6596c1; }
+.state-pill.tag-pendiente-de-clase-prueba { background: #fff3d9; color: #966b22; }
+.state-pill.tag-pendiente-de-clase-prueba::before { background: #d19a34; }
+.state-pill.tag-clase-de-prueba-agendada { background: #e9eafb; color: #5c61a1; }
+.state-pill.tag-clase-de-prueba-agendada::before { background: #7e83c2; }
+.state-pill.tag-inscrito { background: #e3f2e5; color: #3d7a49; }
+.state-pill.tag-inscrito::before { background: #65a26d; }
+.state-pill.tag-en-espera { background: #f6e9f6; color: #885b8a; }
+.state-pill.tag-en-espera::before { background: #ad78ae; }
+.state-pill.tag-perdido { background: #fbe7e5; color: #a05248; }
+.state-pill.tag-perdido::before { background: #c87368; }
+.state-pill.tag-peticion-matricula { background: #e4f3f1; color: #327b72; }
+.state-pill.tag-peticion-matricula::before { background: #5aa69b; }
+.data-tag { display: inline-block; max-width: 180px; padding: 5px 9px; border-radius: 7px; font-size: 10px; font-weight: 700; line-height: 1.25; }
+.instrumento-tag { background: #f1e9fb; color: #7950a6; }
+.nivel-tag { background: #fff1d9; color: #a66c18; }
+.tag-musica-para-bebes-desde-6-meses { background: #e5f4f1; color: #267b70; }
+.tag-musica-y-movimiento-desde-3-anos { background: #eaf0ff; color: #4c67a4; }
+.tag-piano { background: #f1e9fb; color: #7950a6; }
+.tag-canto { background: #fce9ef; color: #a64e6b; }
+.tag-violin { background: #fff1d9; color: #a66c18; }
+.tag-guitarra { background: #e7f3e4; color: #4b824e; }
+.tag-percusion { background: #fbe8dc; color: #a75e35; }
+.tag-iniciacion { background: #e6f3e7; color: #4b8256; }
+.tag-intermedio { background: #eaf0ff; color: #506ca6; }
+.tag-avanzado { background: #fce6e6; color: #a54e4e; }
+.actions-cell { white-space: nowrap; }
+.row-action { padding: 5px 7px; border: 0; background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
+.edit-action { color: var(--green); }
+.delete-action { color: #ad5d4c; }
+.row-action:hover { text-decoration: underline; }
+.empty-state { padding: 33px 12px 38px; text-align: center; }
+.empty-icon { display: grid; place-items: center; width: 39px; height: 39px; margin: 0 auto 10px; border-radius: 12px; background: #f3f1e9; color: #a2844e; font-size: 22px; }
+.empty-state h3 { margin-bottom: 5px; font-size: 14px; }
+.empty-state p { margin: 0; color: var(--muted); font-size: 12px; }
+.list-message { padding-bottom: 8px; }
+footer { padding: 31px 0 28px; color: #9a9e97; font-size: 11px; text-align: center; }
+
+@media (max-width: 680px) {
+  .page-shell { width: min(100% - 32px, 540px); }
+  .topbar { height: 68px; }
+  .intro { padding: 38px 0 24px; }
+  h1 span { display: block; margin-top: 3px; }
+  .form-panel { padding: 21px 18px 14px; }
+  .form-fields { grid-template-columns: 1fr; gap: 14px; margin-top: 18px; }
+  .field-wide { grid-column: auto; }
+  .form-actions { display: block; }
+  .button-primary { width: 100%; }
+  .leads-section { margin-top: 30px; }
+  .table-panel { padding: 0 13px; }
+  .lead-filters { grid-template-columns: 1fr; gap: 11px; padding-top: 15px; }
+  table { min-width: 760px; }
+}
+
+.leads-actions { display: flex; align-items: center; gap: 10px; }
+.leads-actions .button-secondary { height: 34px; padding: 0 11px; }
+.leads-actions .button-secondary span { margin-right: 4px; color: var(--green); font-size: 15px; }
+
+@media (max-width: 680px) {
+  .leads-heading { align-items: flex-start; }
+  .leads-actions { flex-direction: column; align-items: flex-end; gap: 3px; }
+}

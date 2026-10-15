@@ -1,0 +1,14 @@
+{
+  "name": "crm-leads-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API inicial para gestionar leads de un CRM",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.1.0"
+  }
+}
