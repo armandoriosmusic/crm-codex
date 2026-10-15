@@ -8,7 +8,6 @@ const submitButton = document.querySelector('#submit-button');
 const formMessage = document.querySelector('#form-message');
 const tableBody = document.querySelector('#leads-table-body');
 const emptyState = document.querySelector('#empty-state');
-const leadCount = document.querySelector('#lead-count');
 const listMessage = document.querySelector('#list-message');
 const refreshButton = document.querySelector('#refresh-button');
 const formTitle = document.querySelector('#form-title');
@@ -18,6 +17,13 @@ const instrumentFilter = document.querySelector('#instrument-filter');
 const statusFilter = document.querySelector('#status-filter');
 const visibleLeadCount = document.querySelector('#visible-lead-count');
 const exportButton = document.querySelector('#export-button');
+const leadStatValues = {
+  total: document.querySelector('#stat-total'),
+  noContesta: document.querySelector('#stat-no-contesta'),
+  enEspera: document.querySelector('#stat-en-espera'),
+  inscrito: document.querySelector('#stat-inscrito'),
+  perdido: document.querySelector('#stat-perdido'),
+};
 let editingLeadId = null;
 let allLeads = [];
 
@@ -99,9 +105,31 @@ function filterLeads() {
   });
 }
 
+function updateLeadStats() {
+  const stats = {
+    total: allLeads.length,
+    noContesta: 0,
+    enEspera: 0,
+    inscrito: 0,
+    perdido: 0,
+  };
+
+  for (const lead of allLeads) {
+    const status = slugify(lead.estado || 'No contesta');
+    if (status === 'no-contesta') stats.noContesta += 1;
+    if (status === 'en-espera') stats.enEspera += 1;
+    if (status === 'inscrito') stats.inscrito += 1;
+    if (status === 'perdido') stats.perdido += 1;
+  }
+
+  for (const [key, element] of Object.entries(leadStatValues)) {
+    element.textContent = String(stats[key]);
+  }
+}
+
 function renderLeads(leads) {
+  updateLeadStats();
   tableBody.replaceChildren();
-  leadCount.textContent = String(leads.length);
   visibleLeadCount.textContent = String(leads.length);
   emptyState.hidden = leads.length > 0;
   emptyState.querySelector('h3').textContent = allLeads.length && !leads.length ? 'No hay coincidencias' : 'Aún no hay leads';

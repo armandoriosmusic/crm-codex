@@ -83,13 +83,31 @@
 
       <section class="leads-section" aria-labelledby="leads-title">
         <div class="section-heading leads-heading">
-          <div>
-            <p class="eyebrow">SEGUIMIENTO</p>
-            <h2 id="leads-title">Leads recibidos <span id="lead-count" class="count-badge">0</span></h2>
-          </div>
           <div class="leads-actions">
             <button id="export-button" class="button-secondary" type="button"><span aria-hidden="true">↓</span> Descargar CSV</button>
             <button id="refresh-button" class="button-text" type="button"><span aria-hidden="true">↻</span> Actualizar</button>
+          </div>
+        </div>
+        <div class="lead-stats" aria-label="Estadísticas de leads" aria-live="polite">
+          <div class="lead-stat stat-total">
+            <span class="lead-stat-label">Total de leads</span>
+            <strong id="stat-total" class="lead-stat-value">0</strong>
+          </div>
+          <div class="lead-stat stat-no-contesta">
+            <span class="lead-stat-label">No contesta</span>
+            <strong id="stat-no-contesta" class="lead-stat-value">0</strong>
+          </div>
+          <div class="lead-stat stat-en-espera">
+            <span class="lead-stat-label">En espera</span>
+            <strong id="stat-en-espera" class="lead-stat-value">0</strong>
+          </div>
+          <div class="lead-stat stat-inscrito">
+            <span class="lead-stat-label">Inscrito</span>
+            <strong id="stat-inscrito" class="lead-stat-value">0</strong>
+          </div>
+          <div class="lead-stat stat-perdido">
+            <span class="lead-stat-label">Perdido</span>
+            <strong id="stat-perdido" class="lead-stat-value">0</strong>
           </div>
         </div>
         <div class="panel table-panel">
