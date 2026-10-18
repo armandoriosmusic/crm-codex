@@ -2,6 +2,25 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const gmail = require('./gmail');
+
+// Permite conservar la configuración local entre sesiones sin incluir secretos
+// en Git. Las variables ya definidas en el entorno tienen prioridad.
+function loadLocalEnv() {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const rawLine of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const separator = line.indexOf('=');
+    if (separator < 1) continue;
+    const key = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim().replace(/^(['"])(.*)\1$/, '$2');
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
+
+loadLocalEnv();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -50,12 +69,29 @@ db.exec(`
   )
 `);
 
+// Metadatos internos de sincronización. No se muestran como campos nuevos
+// del formulario; solo permiten recordar qué correos ya se han procesado.
+db.exec(`CREATE TABLE IF NOT EXISTS crm_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gmail_imported_messages (
+    message_id TEXT PRIMARY KEY,
+    lead_id INTEGER NOT NULL,
+    received_at TEXT NOT NULL
+  )
+`);
+const existingColumns = new Set(db.prepare('PRAGMA table_info(leads)').all().map((column) => column.name));
+if (!existingColumns.has('gmail_message_id')) db.exec('ALTER TABLE leads ADD COLUMN gmail_message_id TEXT');
+if (!existingColumns.has('ultimo_contacto_en')) db.exec('ALTER TABLE leads ADD COLUMN ultimo_contacto_en TEXT');
+if (!existingColumns.has('contactos_count')) db.exec('ALTER TABLE leads ADD COLUMN contactos_count INTEGER NOT NULL DEFAULT 1');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS leads_gmail_message_id ON leads(gmail_message_id) WHERE gmail_message_id IS NOT NULL');
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Opciones usadas por los desplegables de la futura interfaz.
 const opciones = {
   estados: [
+    'Nuevo',
     'No contesta',
     'En Contacto',
     'Pendiente de Clase Prueba',
@@ -96,6 +132,7 @@ function serializeLead(row) {
     edad: row.edad,
     conversacion: row.conversacion,
     creadoEn: row.creado_en,
+    ultimoContactoEn: row.ultimo_contacto_en,
   };
 }
 
@@ -130,6 +167,34 @@ const statements = {
     WHERE id = @id
   `),
   deleteLead: db.prepare('DELETE FROM leads WHERE id = ?'),
+  findLeadByEmail: db.prepare('SELECT * FROM leads WHERE lower(trim(email)) = lower(trim(?)) ORDER BY id ASC LIMIT 1'),
+  findImportedMessage: db.prepare('SELECT message_id FROM gmail_imported_messages WHERE message_id = ?'),
+  recordImportedMessage: db.prepare('INSERT INTO gmail_imported_messages (message_id, lead_id, received_at) VALUES (?, ?, ?)'),
+  insertImportedLead: db.prepare(`
+    INSERT INTO leads
+      (nombre, estado, instrumento, nivel, asignado_a, telefono, email, edad, conversacion, creado_en, gmail_message_id, ultimo_contacto_en, contactos_count)
+    VALUES
+      (@nombre, 'Nuevo', @instrumento, @nivel, '', @telefono, @email, @edad, @conversacion, @creadoEn, @gmailMessageId, @contactedAt, 1)
+  `),
+  updateImportedLead: db.prepare(`
+    UPDATE leads SET
+      nombre = @nombre,
+      instrumento = @instrumento,
+      nivel = @nivel,
+      telefono = @telefono,
+      email = @email,
+      edad = @edad,
+      conversacion = @conversacion,
+      gmail_message_id = @gmailMessageId,
+      ultimo_contacto_en = @contactedAt,
+      contactos_count = COALESCE(contactos_count, 1) + 1
+    WHERE id = @id
+  `),
+};
+
+const settings = {
+  get: (key) => db.prepare('SELECT value FROM crm_settings WHERE key = ?').get(key)?.value || null,
+  set: db.prepare('INSERT INTO crm_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
 };
 
 app.get('/leads', (req, res) => {
@@ -208,7 +273,7 @@ app.post('/leads', (req, res) => {
   // almacenados tengan siempre el mismo formato, incluso sin frontend.
   const lead = {
     nombre: nombre.trim(),
-    estado: estado ?? 'No contesta',
+    estado: estado ?? 'Nuevo',
     instrumento: instrumento ?? null,
     nivel: nivel ?? null,
     asignadoA: asignadoA?.trim() ?? '',
@@ -290,6 +355,128 @@ app.delete('/leads/:id', (req, res) => {
   // igual que hacía el endpoint original basado en memoria.
   statements.deleteLead.run(id);
   res.json(serializeLead(lead));
+});
+
+function startOfCurrentWeek() {
+  const date = new Date();
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function gmailDateQuery(date) {
+  return date.toISOString().slice(0, 10).replace(/-/g, '/');
+}
+
+function appendContactEvent(conversation, lead) {
+  const event = `[${new Intl.DateTimeFormat('es-ES', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'Europe/Madrid',
+  }).format(new Date(lead.receivedAt))}] Ha vuelto a contactar mediante el formulario: ${lead.subject}`;
+  return conversation ? `${conversation.trim()}\n${event}` : event;
+}
+
+async function synchronizeGmail() {
+  if (!gmail.isConfigured()) {
+    throw new Error('Gmail no está configurado. Define GMAIL_CLIENT_ID y GMAIL_CLIENT_SECRET.');
+  }
+
+  const previousSync = settings.get('gmail_last_sync_at');
+  const fromDate = previousSync ? new Date(previousSync) : startOfCurrentWeek();
+  // Solapamos dos días para no perder mensajes en el límite de una sincronización.
+  fromDate.setDate(fromDate.getDate() - (previousSync ? 2 : 0));
+  const query = `to:info@musicadelosrios.com subject:Cañaveral after:${gmailDateQuery(fromDate)}`;
+  const candidates = await gmail.listMessages(query);
+  let created = 0;
+  let updated = 0;
+  let ignored = 0;
+
+  const importTransaction = db.transaction((lead, existingByEmail) => {
+    if (statements.findImportedMessage.get(lead.gmailMessageId)) return 'duplicate';
+    const existing = existingByEmail || statements.findLeadByEmail.get(lead.email);
+    if (existing) {
+      statements.updateImportedLead.run({
+        id: existing.id,
+        nombre: lead.nombre || existing.nombre,
+        instrumento: lead.instrumento || existing.instrumento,
+        nivel: lead.nivel || existing.nivel,
+        telefono: lead.telefono || existing.telefono,
+        email: lead.email || existing.email,
+        edad: lead.edad ?? existing.edad,
+        conversacion: appendContactEvent(existing.conversacion, lead),
+        gmailMessageId: lead.gmailMessageId,
+        contactedAt: lead.receivedAt,
+      });
+      statements.recordImportedMessage.run(lead.gmailMessageId, existing.id, lead.receivedAt);
+      return 'updated';
+    }
+    const result = statements.insertImportedLead.run({
+      nombre: lead.nombre,
+      instrumento: lead.instrumento,
+      nivel: lead.nivel,
+      telefono: lead.telefono,
+      email: lead.email,
+      edad: lead.edad,
+      conversacion: appendContactEvent('', lead),
+      creadoEn: lead.receivedAt,
+      gmailMessageId: lead.gmailMessageId,
+      contactedAt: lead.receivedAt,
+    });
+    statements.recordImportedMessage.run(lead.gmailMessageId, result.lastInsertRowid, lead.receivedAt);
+    return 'created';
+  });
+
+  for (const candidate of candidates) {
+    const message = await gmail.getMessage(candidate.id);
+    const lead = gmail.parseLeadMessage(message);
+    if (!lead) {
+      ignored += 1;
+      continue;
+    }
+    const result = importTransaction(lead);
+    if (result === 'created') created += 1;
+    if (result === 'updated') updated += 1;
+  }
+
+  settings.set.run('gmail_last_sync_at', new Date().toISOString());
+  return { created, updated, ignored, checked: candidates.length };
+}
+
+app.get('/gmail/status', (req, res) => {
+  const token = gmail.readToken();
+  res.json({
+    configured: gmail.isConfigured(),
+    authorized: Boolean(token?.refresh_token || token?.access_token),
+    lastSyncAt: settings.get('gmail_last_sync_at'),
+  });
+});
+
+app.get('/gmail/auth-url', (req, res) => {
+  try {
+    res.json({ url: gmail.authorizationUrl() });
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+});
+
+app.get('/gmail/oauth/callback', async (req, res) => {
+  try {
+    if (!req.query.code) throw new Error('Google no devolvió un código de autorización.');
+    await gmail.exchangeCode(req.query.code);
+    res.redirect('/?gmail=authorized');
+  } catch (error) {
+    res.status(500).send(`No se pudo autorizar Gmail: ${error.message}`);
+  }
+});
+
+app.post('/gmail/sync', async (req, res) => {
+  try {
+    res.json(await synchronizeGmail());
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
 });
 
 app.listen(port, () => {

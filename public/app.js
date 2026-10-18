@@ -17,6 +17,8 @@ const instrumentFilter = document.querySelector('#instrument-filter');
 const statusFilter = document.querySelector('#status-filter');
 const visibleLeadCount = document.querySelector('#visible-lead-count');
 const exportButton = document.querySelector('#export-button');
+const gmailSyncButton = document.querySelector('#gmail-sync-button');
+const gmailMessage = document.querySelector('#gmail-message');
 const leadStatValues = {
   total: document.querySelector('#stat-total'),
   noContesta: document.querySelector('#stat-no-contesta'),
@@ -102,6 +104,16 @@ function filterLeads() {
     const matchesInstrument = !instrument || lead.instrumento === instrument;
     const matchesStatus = !status || (lead.estado || 'No contesta') === status;
     return matchesSearch && matchesInstrument && matchesStatus;
+  }).sort((firstLead, secondLead) => {
+    const firstDate = Date.parse(firstLead.ultimoContactoEn || firstLead.creadoEn || '');
+    const secondDate = Date.parse(secondLead.ultimoContactoEn || secondLead.creadoEn || '');
+
+    if (Number.isNaN(firstDate) && Number.isNaN(secondDate)) {
+      return (secondLead.id || 0) - (firstLead.id || 0);
+    }
+    if (Number.isNaN(firstDate)) return 1;
+    if (Number.isNaN(secondDate)) return -1;
+    return secondDate - firstDate;
   });
 }
 
@@ -294,6 +306,7 @@ form.addEventListener('submit', async (event) => {
 });
 
 refreshButton.addEventListener('click', loadLeads);
+gmailSyncButton.addEventListener('click', syncGmail);
 exportButton.addEventListener('click', () => {
   window.location.href = '/leads/export.csv';
 });
@@ -303,3 +316,37 @@ instrumentFilter.addEventListener('change', () => renderLeads(filterLeads()));
 statusFilter.addEventListener('change', () => renderLeads(filterLeads()));
 loadOptions();
 loadLeads();
+syncGmail({ automatic: true });
+
+async function syncGmail({ automatic = false } = {}) {
+  gmailSyncButton.disabled = true;
+  gmailMessage.className = 'list-message';
+  if (!automatic) gmailMessage.textContent = 'Comprobando Gmail…';
+  try {
+    const statusResponse = await fetch('/gmail/status');
+    const status = await statusResponse.json();
+    if (!status.configured) {
+      if (automatic) return;
+      throw new Error('Falta configurar el acceso de Gmail en el servidor.');
+    }
+    if (!status.authorized) {
+      if (automatic) return;
+      const authResponse = await fetch('/gmail/auth-url');
+      const auth = await authResponse.json();
+      if (!authResponse.ok) throw new Error(auth.error || 'No se pudo preparar la autorización de Gmail.');
+      window.location.href = auth.url;
+      return;
+    }
+    const response = await fetch('/gmail/sync', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'No se pudo sincronizar Gmail.');
+    await loadLeads();
+    gmailMessage.textContent = `Gmail sincronizado: ${result.created} nuevos, ${result.updated} actualizados.`;
+  } catch (error) {
+    if (automatic) return;
+    gmailMessage.textContent = error.message || 'No se pudo sincronizar Gmail.';
+    gmailMessage.classList.add('error');
+  } finally {
+    gmailSyncButton.disabled = false;
+  }
+}

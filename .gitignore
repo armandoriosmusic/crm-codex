@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Base de datos local
+data/*.sqlite
+data/*.sqlite-*
+data/*.db
+
+# Variables y secretos
+.env
+.env.*
+data/gmail-token.json
+
+# Archivos del sistema
+.DS_Store
+
+# Configuración personal de VS Code
+.vscode/

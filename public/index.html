@@ -84,10 +84,12 @@
       <section class="leads-section" aria-labelledby="leads-title">
         <div class="section-heading leads-heading">
           <div class="leads-actions">
+            <button id="gmail-sync-button" class="button-secondary" type="button"><span aria-hidden="true">↻</span> Sincronizar Gmail</button>
             <button id="export-button" class="button-secondary" type="button"><span aria-hidden="true">↓</span> Descargar CSV</button>
             <button id="refresh-button" class="button-text" type="button"><span aria-hidden="true">↻</span> Actualizar</button>
           </div>
         </div>
+        <p id="gmail-message" class="list-message" role="status" aria-live="polite"></p>
         <div class="lead-stats" aria-label="Estadísticas de leads" aria-live="polite">
           <div class="lead-stat stat-total">
             <span class="lead-stat-label">Total de leads</span>

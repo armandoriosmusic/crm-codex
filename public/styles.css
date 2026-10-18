@@ -115,6 +115,8 @@ td a { color: var(--green); text-decoration: none; }
 td a:hover { text-decoration: underline; }
 .state-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 20px; background: var(--green-pale); color: var(--green); font-size: 10px; font-weight: 600; white-space: nowrap; }
 .state-pill::before { width: 5px; height: 5px; border-radius: 50%; background: #70a47d; content: ''; }
+.state-pill.tag-nuevo { background: #e4efff; color: #356aa3; }
+.state-pill.tag-nuevo::before { background: #5d91cf; }
 .state-pill.tag-no-contesta { background: #f0f1ef; color: #69716b; }
 .state-pill.tag-no-contesta::before { background: #969e97; }
 .state-pill.tag-en-contacto { background: #e5f0fb; color: #3f6d99; }
@@ -177,6 +179,7 @@ footer { padding: 31px 0 28px; color: #9a9e97; font-size: 11px; text-align: cent
 .leads-actions { display: flex; align-items: center; gap: 10px; }
 .leads-actions .button-secondary { height: 34px; padding: 0 11px; }
 .leads-actions .button-secondary span { margin-right: 4px; color: var(--green); font-size: 15px; }
+#gmail-message { margin: 0 0 12px; }
 
 @media (max-width: 680px) {
   .leads-heading { align-items: flex-start; }
