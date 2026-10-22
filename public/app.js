@@ -19,6 +19,16 @@ const visibleLeadCount = document.querySelector('#visible-lead-count');
 const exportButton = document.querySelector('#export-button');
 const gmailSyncButton = document.querySelector('#gmail-sync-button');
 const gmailMessage = document.querySelector('#gmail-message');
+const loginPanel = document.querySelector('#login-panel');
+const loginForm = document.querySelector('#login-form');
+const loginUsername = document.querySelector('#login-username');
+const loginPassword = document.querySelector('#login-password');
+const loginButton = document.querySelector('#login-button');
+const loginMessage = document.querySelector('#login-message');
+const logoutButton = document.querySelector('#logout-button');
+const userBar = document.querySelector('#user-bar');
+const currentUser = document.querySelector('#current-user');
+const protectedContent = document.querySelectorAll('.intro, .form-panel, .leads-section, footer');
 const leadStatValues = {
   total: document.querySelector('#stat-total'),
   noContesta: document.querySelector('#stat-no-contesta'),
@@ -61,6 +71,22 @@ async function readResponse(response) {
   throw new Error(response.ok
     ? 'El servidor devolvió una respuesta no válida.'
     : `El servidor no tiene disponible esta operación (${response.status}). Reinicia el backend.`);
+}
+
+function showAuthenticatedUser(user) {
+  loginPanel.hidden = true;
+  userBar.hidden = false;
+  currentUser.textContent = user.displayName;
+  protectedContent.forEach((element) => { element.hidden = false; });
+}
+
+function showLogin(message = '') {
+  loginPanel.hidden = false;
+  userBar.hidden = true;
+  protectedContent.forEach((element) => { element.hidden = true; });
+  loginMessage.textContent = message;
+  loginMessage.classList.toggle('error', Boolean(message));
+  loginUsername.focus();
 }
 
 function startEditing(lead) {
@@ -310,13 +336,58 @@ gmailSyncButton.addEventListener('click', syncGmail);
 exportButton.addEventListener('click', () => {
   window.location.href = '/leads/export.csv';
 });
+logoutButton.addEventListener('click', async () => {
+  await fetch('/logout', { method: 'POST', credentials: 'same-origin' });
+  allLeads = [];
+  showLogin('Sesión cerrada.');
+});
 cancelEditButton.addEventListener('click', cancelEditing);
 leadSearchInput.addEventListener('input', () => renderLeads(filterLeads()));
 instrumentFilter.addEventListener('change', () => renderLeads(filterLeads()));
 statusFilter.addEventListener('change', () => renderLeads(filterLeads()));
-loadOptions();
-loadLeads();
-syncGmail({ automatic: true });
+
+loginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  loginButton.disabled = true;
+  loginMessage.textContent = '';
+  loginMessage.classList.remove('error');
+  try {
+    const response = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ username: loginUsername.value.trim(), password: loginPassword.value }),
+    });
+    const result = await readResponse(response);
+    if (!response.ok) throw new Error(result.error || 'No se pudo iniciar sesión.');
+    loginPassword.value = '';
+    showAuthenticatedUser(result.user);
+    await loadOptions();
+    await loadLeads();
+    syncGmail({ automatic: true });
+  } catch (error) {
+    loginMessage.textContent = error.message || 'No se pudo conectar con el servidor.';
+    loginMessage.classList.add('error');
+  } finally {
+    loginButton.disabled = false;
+  }
+});
+
+async function initializeAuthentication() {
+  try {
+    const response = await fetch('/auth/me', { credentials: 'same-origin' });
+    if (!response.ok) return showLogin();
+    const result = await response.json();
+    showAuthenticatedUser(result.user);
+    await loadOptions();
+    await loadLeads();
+    syncGmail({ automatic: true });
+  } catch (error) {
+    showLogin('No se pudo conectar con el servidor.');
+  }
+}
+
+initializeAuthentication();
 
 async function syncGmail({ automatic = false } = {}) {
   gmailSyncButton.disabled = true;

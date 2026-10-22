@@ -10,6 +10,7 @@ data/*.db
 # Variables y secretos
 .env
 .env.*
+!.env.example
 data/gmail-token.json
 
 # Archivos del sistema

@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const Database = require('better-sqlite3');
 const gmail = require('./gmail');
@@ -25,10 +26,14 @@ loadLocalEnv();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// La base de datos vive dentro del proyecto para que los leads sobrevivan
-// a los reinicios del servidor y puedan respaldarse junto con la aplicación.
-const dataDirectory = path.join(__dirname, '..', 'data');
-const databasePath = path.join(dataDirectory, 'crm.sqlite');
+// La ruta puede separarse del código mediante CRM_DATABASE_PATH. Si no se
+// configura, se conserva la ubicación local existente para no alterar datos.
+const projectRoot = path.join(__dirname, '..');
+const configuredDatabasePath = process.env.CRM_DATABASE_PATH || path.join('data', 'crm.sqlite');
+const databasePath = path.isAbsolute(configuredDatabasePath)
+  ? configuredDatabasePath
+  : path.resolve(projectRoot, configuredDatabasePath);
+const dataDirectory = path.dirname(databasePath);
 fs.mkdirSync(dataDirectory, { recursive: true });
 const db = new Database(databasePath);
 
@@ -41,14 +46,6 @@ db.pragma('journal_mode = WAL');
 function closeDatabase() {
   if (db.open) db.close();
 }
-process.once('SIGINT', () => {
-  closeDatabase();
-  process.exit(0);
-});
-process.once('SIGTERM', () => {
-  closeDatabase();
-  process.exit(0);
-});
 
 // La tabla contiene los mismos campos que utiliza actualmente el frontend.
 // Los nombres snake_case son internos de SQLite; más abajo se convierten a
@@ -79,6 +76,150 @@ db.exec(`
     received_at TEXT NOT NULL
   )
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )
+`);
+db.exec('CREATE INDEX IF NOT EXISTS sessions_expires_at ON sessions(expires_at)');
+
+const sessionStatements = {
+  findUserByUsername: db.prepare('SELECT * FROM users WHERE username = ? AND active = 1'),
+  findSession: db.prepare(`
+    SELECT sessions.token_hash, sessions.expires_at, users.id, users.username, users.display_name
+    FROM sessions
+    INNER JOIN users ON users.id = sessions.user_id
+    WHERE sessions.token_hash = ? AND users.active = 1
+  `),
+  insertSession: db.prepare(`
+    INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
+    VALUES (?, ?, ?, ?)
+  `),
+  deleteSession: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
+  deleteExpiredSessions: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
+};
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derivedKey = crypto.scryptSync(password, salt, 64, {
+    N: 16384,
+    r: 8,
+    p: 1,
+  });
+  return `scrypt$${salt}$${derivedKey.toString('hex')}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const [, salt, expectedHex] = storedHash.split('$');
+  if (!salt || !expectedHex) return false;
+  const expected = Buffer.from(expectedHex, 'hex');
+  const actual = crypto.scryptSync(password, salt, expected.length, {
+    N: 16384,
+    r: 8,
+    p: 1,
+  });
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+const sessionCookieName = 'crm_session';
+const sessionDurationMs = 8 * 60 * 60 * 1000;
+
+function hashSessionToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function parseCookies(header) {
+  return Object.fromEntries((header || '').split(';').map((part) => {
+    const separator = part.indexOf('=');
+    if (separator < 0) return ['', ''];
+    return [part.slice(0, separator).trim(), decodeURIComponent(part.slice(separator + 1).trim())];
+  }).filter(([key]) => key));
+}
+
+function serializeUser(user) {
+  return {
+    username: user.username,
+    displayName: user.display_name,
+  };
+}
+
+function setSessionCookie(res, token, maxAgeSeconds) {
+  const attributes = [
+    `${sessionCookieName}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (process.env.NODE_ENV === 'production') attributes.push('Secure');
+  res.set('Set-Cookie', attributes.join('; '));
+}
+
+function clearSessionCookie(res) {
+  const attributes = [`${sessionCookieName}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+  if (process.env.NODE_ENV === 'production') attributes.push('Secure');
+  res.set('Set-Cookie', attributes.join('; '));
+}
+
+function findAuthenticatedUser(req) {
+  const token = parseCookies(req.headers.cookie)[sessionCookieName];
+  if (!token) return null;
+  const session = sessionStatements.findSession.get(hashSessionToken(token));
+  if (!session || Date.parse(session.expires_at) <= Date.now()) {
+    if (session) sessionStatements.deleteSession.run(session.token_hash);
+    return null;
+  }
+  return { ...session, token };
+}
+
+function requireAuth(req, res, next) {
+  const user = findAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Debes iniciar sesión.' });
+  req.user = user;
+  next();
+}
+
+const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+if (userCount === 0) {
+  const bootstrapUsers = [
+    { username: 'armando', displayName: 'Armando', password: process.env.CRM_ARMANDO_PASSWORD },
+    { username: 'humberto', displayName: 'Humberto', password: process.env.CRM_HUMBERTO_PASSWORD },
+  ];
+  if (bootstrapUsers.every((user) => user.password)) {
+    const insertUser = db.prepare(`
+      INSERT INTO users (username, display_name, password_hash, created_at)
+      VALUES (@username, @displayName, @passwordHash, @createdAt)
+    `);
+    const createUsers = db.transaction(() => {
+      const createdAt = new Date().toISOString();
+      for (const user of bootstrapUsers) {
+        insertUser.run({
+          username: user.username,
+          displayName: user.displayName,
+          passwordHash: hashPassword(user.password),
+          createdAt,
+        });
+      }
+    });
+    createUsers();
+    console.log('Usuarios iniciales creados: armando y humberto.');
+  } else {
+    console.warn('No hay usuarios creados. Define CRM_ARMANDO_PASSWORD y CRM_HUMBERTO_PASSWORD para inicializarlos.');
+  }
+}
 const existingColumns = new Set(db.prepare('PRAGMA table_info(leads)').all().map((column) => column.name));
 if (!existingColumns.has('gmail_message_id')) db.exec('ALTER TABLE leads ADD COLUMN gmail_message_id TEXT');
 if (!existingColumns.has('ultimo_contacto_en')) db.exec('ALTER TABLE leads ADD COLUMN ultimo_contacto_en TEXT');
@@ -86,7 +227,66 @@ if (!existingColumns.has('contactos_count')) db.exec('ALTER TABLE leads ADD COLU
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS leads_gmail_message_id ON leads(gmail_message_id) WHERE gmail_message_id IS NOT NULL');
 
 app.use(express.json());
+
+// El CRM es de uso interno: esta cabecera evita que los rastreadores indexen
+// cualquier respuesta si el servicio llega a ser accesible desde Internet.
+app.use((req, res, next) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  next();
+});
+
+app.get('/health', (req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
+});
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (typeof username !== 'string' || typeof password !== 'string' || !username.trim() || !password) {
+    return res.status(400).json({ error: 'Usuario y contraseña son obligatorios.' });
+  }
+
+  const user = sessionStatements.findUserByUsername.get(username.trim().toLowerCase());
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + sessionDurationMs);
+  const token = crypto.randomBytes(32).toString('base64url');
+  sessionStatements.deleteExpiredSessions.run(now.toISOString());
+  sessionStatements.insertSession.run(
+    hashSessionToken(token),
+    user.id,
+    expiresAt.toISOString(),
+    now.toISOString(),
+  );
+  setSessionCookie(res, token, Math.floor(sessionDurationMs / 1000));
+  res.json({ user: serializeUser(user) });
+});
+
+app.get('/auth/me', (req, res) => {
+  const user = findAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'Debes iniciar sesión.' });
+  res.json({ user: serializeUser(user) });
+});
+
+app.post('/logout', (req, res) => {
+  const token = parseCookies(req.headers.cookie)[sessionCookieName];
+  if (token) sessionStatements.deleteSession.run(hashSessionToken(token));
+  clearSessionCookie(res);
+  res.status(204).end();
+});
+
+app.use('/options', requireAuth);
+app.use('/leads', requireAuth);
+app.use('/gmail', requireAuth);
 
 // Opciones usadas por los desplegables de la futura interfaz.
 const opciones = {
@@ -144,7 +344,7 @@ const statements = {
     SELECT nombre, email, estado, instrumento, nivel, asignado_a,
       telefono, edad, conversacion, creado_en
     FROM leads
-    ORDER BY id DESC
+    ORDER BY COALESCE(ultimo_contacto_en, creado_en) DESC, id DESC
   `),
   findLead: db.prepare('SELECT * FROM leads WHERE id = ?'),
   insertLead: db.prepare(`
@@ -479,6 +679,31 @@ app.post('/gmail/sync', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`CRM Leads API escuchando en http://localhost:${port}`);
 });
+
+let isShuttingDown = false;
+
+function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Recibida ${signal}; cerrando el servidor...`);
+
+  server.close((error) => {
+    closeDatabase();
+    if (error) {
+      console.error('No se pudo cerrar el servidor correctamente.', error);
+      process.exitCode = 1;
+    }
+  });
+
+  setTimeout(() => {
+    console.error('El cierre ordenado ha superado el tiempo máximo.');
+    closeDatabase();
+    process.exit(1);
+  }, 10000).unref();
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));

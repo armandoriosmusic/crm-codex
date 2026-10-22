@@ -4,6 +4,9 @@
   "private": true,
   "description": "API inicial para gestionar leads de un CRM",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/server.js"
   },

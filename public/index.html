@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f6f2">
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <title>CRM - Música de los Ríos | Cañaveral</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
@@ -16,15 +17,41 @@
           <span class="brand-name">Música de los Ríos</span>
         </a>
         <span class="location-label"><span class="status-dot" aria-hidden="true"></span> Cañaveral</span>
+        <div id="user-bar" class="user-bar" hidden>
+          <span id="current-user"></span>
+          <button id="logout-button" class="button-text" type="button">Cerrar sesión</button>
+        </div>
       </header>
 
-      <section class="intro" aria-labelledby="page-title">
+      <section id="login-panel" class="panel login-panel" aria-labelledby="login-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ACCESO PRIVADO</p>
+            <h2 id="login-title">Iniciar sesión</h2>
+          </div>
+          <span class="heading-icon" aria-hidden="true">↗</span>
+        </div>
+        <form id="login-form" class="login-form">
+          <label class="field">
+            <span>Usuario</span>
+            <input id="login-username" name="username" type="text" autocomplete="username" required>
+          </label>
+          <label class="field">
+            <span>Contraseña</span>
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <button id="login-button" class="button-primary" type="submit">Entrar <span aria-hidden="true">↗</span></button>
+          <p id="login-message" class="form-message" role="alert" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="intro" aria-labelledby="page-title" hidden>
         <p class="eyebrow">GESTIÓN DE ALUMNOS</p>
         <h1 id="page-title">CRM - Música de los Ríos <span>| Cañaveral</span></h1>
         <p class="intro-copy">Un espacio sencillo para organizar las personas interesadas en aprender música.</p>
       </section>
 
-      <section class="panel form-panel" aria-labelledby="form-title">
+      <section class="panel form-panel" aria-labelledby="form-title" hidden>
         <div class="section-heading">
           <div>
             <p class="eyebrow">GESTIÓN DE CONTACTO</p>
@@ -81,7 +108,7 @@
         </form>
       </section>
 
-      <section class="leads-section" aria-labelledby="leads-title">
+      <section class="leads-section" aria-labelledby="leads-title" hidden>
         <div class="section-heading leads-heading">
           <div class="leads-actions">
             <button id="gmail-sync-button" class="button-secondary" type="button"><span aria-hidden="true">↻</span> Sincronizar Gmail</button>
@@ -164,7 +191,7 @@
         </div>
       </section>
 
-      <footer>Hecho para acompañar cada nuevo comienzo musical.</footer>
+      <footer hidden>Hecho para acompañar cada nuevo comienzo musical.</footer>
     </main>
   </body>
 </html>
