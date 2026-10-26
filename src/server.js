@@ -25,6 +25,9 @@ loadLocalEnv();
 
 const app = express();
 const port = process.env.PORT || 3000;
+// En producción el proceso no debe aceptar conexiones directas desde Internet.
+// El proxy HTTPS de una fase posterior será el único punto de entrada público.
+const host = process.env.HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : undefined);
 
 // La ruta puede separarse del código mediante CRM_DATABASE_PATH. Si no se
 // configura, se conserva la ubicación local existente para no alterar datos.
@@ -679,8 +682,8 @@ app.post('/gmail/sync', async (req, res) => {
   }
 });
 
-const server = app.listen(port, () => {
-  console.log(`CRM Leads API escuchando en http://localhost:${port}`);
+const server = app.listen(port, host, () => {
+  console.log(`CRM Leads API escuchando en http://${host || 'localhost'}:${port}`);
 });
 
 let isShuttingDown = false;

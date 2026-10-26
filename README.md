@@ -74,6 +74,7 @@ El servidor lee las variables de entorno del sistema y, si existe, el archivo lo
 |---|---|---|
 | `NODE_ENV` | Activa ajustes de producción, como la cookie `Secure`. | `development` |
 | `PORT` | Puerto HTTP del servidor. | `3001` |
+| `HOST` | Interfaz de escucha. En producción, si no se define, se usa `127.0.0.1`; el acceso público futuro será mediante un proxy HTTPS. | No definir en local |
 | `CRM_DATABASE_PATH` | Ruta de SQLite. Puede ser absoluta o relativa a la raíz del proyecto. | `data/crm.sqlite` |
 | `CRM_ARMANDO_PASSWORD` | Contraseña inicial de Armando, solo cuando todavía no existen usuarios. | Definir en `.env` |
 | `CRM_HUMBERTO_PASSWORD` | Contraseña inicial de Humberto, solo cuando todavía no existen usuarios. | Definir en `.env` |
