@@ -94,8 +94,8 @@
               <input id="edad" name="edad" type="number" min="0" step="1" placeholder="Edad">
             </label>
             <label class="field field-wide">
-              <span>Conversación</span>
-              <textarea id="conversacion" name="conversacion" rows="2" placeholder="Notas sobre la conversación"></textarea>
+              <span>Historial de contacto</span>
+              <textarea id="conversacion" name="conversacion" rows="2" placeholder="Una gestión por línea, con fecha si es posible"></textarea>
             </label>
             <div class="form-actions">
               <div class="edit-actions">
@@ -110,6 +110,10 @@
 
       <section class="leads-section" aria-labelledby="leads-title" hidden>
         <div class="section-heading leads-heading">
+          <div>
+            <p class="eyebrow">SEGUIMIENTO COMERCIAL</p>
+            <h2 id="leads-title">Leads</h2>
+          </div>
           <div class="leads-actions">
             <button id="gmail-sync-button" class="button-secondary" type="button"><span aria-hidden="true">↻</span> Sincronizar Gmail</button>
             <button id="export-button" class="button-secondary" type="button"><span aria-hidden="true">↓</span> Descargar CSV</button>
@@ -174,7 +178,7 @@
                   <th scope="col">Asignado a</th>
                   <th scope="col">Teléfono</th>
                   <th scope="col">Edad</th>
-                  <th scope="col">Conversación</th>
+                  <th scope="col">Última actividad</th>
                   <th scope="col">Fecha de alta</th>
                   <th scope="col">Acciones</th>
                 </tr>

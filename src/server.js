@@ -572,12 +572,12 @@ function gmailDateQuery(date) {
   return date.toISOString().slice(0, 10).replace(/-/g, '/');
 }
 
-function appendContactEvent(conversation, lead) {
+function appendFollowUpContactEvent(conversation, lead) {
   const event = `[${new Intl.DateTimeFormat('es-ES', {
     dateStyle: 'short',
     timeStyle: 'short',
     timeZone: 'Europe/Madrid',
-  }).format(new Date(lead.receivedAt))}] Ha vuelto a contactar mediante el formulario: ${lead.subject}`;
+  }).format(new Date(lead.receivedAt))}] Nuevo formulario recibido`;
   return conversation ? `${conversation.trim()}\n${event}` : event;
 }
 
@@ -608,7 +608,7 @@ async function synchronizeGmail() {
         telefono: lead.telefono || existing.telefono,
         email: lead.email || existing.email,
         edad: lead.edad ?? existing.edad,
-        conversacion: appendContactEvent(existing.conversacion, lead),
+        conversacion: appendFollowUpContactEvent(existing.conversacion, lead),
         gmailMessageId: lead.gmailMessageId,
         contactedAt: lead.receivedAt,
       });
@@ -622,7 +622,9 @@ async function synchronizeGmail() {
       telefono: lead.telefono,
       email: lead.email,
       edad: lead.edad,
-      conversacion: appendContactEvent('', lead),
+      // El primer formulario ya queda reflejado por la fecha de alta. El
+      // historial se reserva para seguimientos y contactos posteriores.
+      conversacion: '',
       creadoEn: lead.receivedAt,
       gmailMessageId: lead.gmailMessageId,
       contactedAt: lead.receivedAt,

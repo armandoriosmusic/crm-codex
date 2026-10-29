@@ -39,15 +39,17 @@ const leadStatValues = {
 let editingLeadId = null;
 let allLeads = [];
 
-function addCell(row, value) {
+function addCell(row, value, label) {
   const cell = document.createElement('td');
+  cell.dataset.label = label;
   cell.textContent = value;
   row.append(cell);
   return cell;
 }
 
-function addTagCell(row, value, type) {
+function addTagCell(row, value, type, label) {
   const cell = document.createElement('td');
+  cell.dataset.label = label;
   if (!value) {
     cell.textContent = '—';
   } else {
@@ -62,6 +64,11 @@ function addTagCell(row, value, type) {
 function slugify(value) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function latestConversationEntry(conversation) {
+  if (!conversation || !conversation.trim()) return '—';
+  return conversation.trim().split('\n').map((entry) => entry.trim()).filter(Boolean).at(-1) || '—';
 }
 
 async function readResponse(response) {
@@ -177,9 +184,10 @@ function renderLeads(leads) {
 
   for (const lead of leads) {
     const row = document.createElement('tr');
-    addCell(row, lead.nombre || '—');
+    addCell(row, lead.nombre || '—', 'Nombre');
 
     const emailCell = document.createElement('td');
+    emailCell.dataset.label = 'Email';
     if (lead.email) {
       const emailLink = document.createElement('a');
       emailLink.href = `mailto:${lead.email}`;
@@ -191,26 +199,28 @@ function renderLeads(leads) {
     row.append(emailCell);
 
     const stateCell = document.createElement('td');
+    stateCell.dataset.label = 'Estado';
     const statePill = document.createElement('span');
     statePill.className = `state-pill tag-${slugify(lead.estado || 'No contesta')}`;
     statePill.textContent = lead.estado || 'No contesta';
     stateCell.append(statePill);
     row.append(stateCell);
 
-    addTagCell(row, lead.instrumento, 'instrumento');
-    addTagCell(row, lead.nivel, 'nivel');
-    addCell(row, lead.asignadoA || '—');
-    addCell(row, lead.telefono || '—');
-    addCell(row, lead.edad === null || lead.edad === undefined ? '—' : String(lead.edad));
-    addCell(row, lead.conversacion || '—');
+    addTagCell(row, lead.instrumento, 'instrumento', 'Instrumento');
+    addTagCell(row, lead.nivel, 'nivel', 'Nivel');
+    addCell(row, lead.asignadoA || '—', 'Asignado a');
+    addCell(row, lead.telefono || '—', 'Teléfono');
+    addCell(row, lead.edad === null || lead.edad === undefined ? '—' : String(lead.edad), 'Edad');
+    addCell(row, latestConversationEntry(lead.conversacion), 'Última actividad');
 
     const date = lead.creadoEn ? new Date(lead.creadoEn) : null;
     addCell(row, date && !Number.isNaN(date.getTime())
       ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
-      : '—');
+      : '—', 'Fecha de alta');
 
     const actionsCell = document.createElement('td');
     actionsCell.className = 'actions-cell';
+    actionsCell.dataset.label = 'Acciones';
     const editButton = document.createElement('button');
     editButton.className = 'row-action edit-action';
     editButton.type = 'button';
