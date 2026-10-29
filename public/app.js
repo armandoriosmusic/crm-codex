@@ -66,9 +66,26 @@ function slugify(value) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function latestConversationEntry(conversation) {
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function removeLegacyAutomaticContact(entry, instrumento) {
+  const prefix = /^\[[^\]]+\]\s+Ha vuelto a contactar mediante el formulario:\s*Música de los Ríos Cañaveral[\s\u00a0]+/u;
+  const withoutPrefix = entry.replace(prefix, '');
+  if (withoutPrefix === entry || !instrumento) return entry;
+
+  const instrument = new RegExp(`^${escapeRegExp(instrumento)}`, 'iu');
+  if (!instrument.test(withoutPrefix)) return entry;
+  return withoutPrefix.replace(instrument, '').trim();
+}
+
+function latestConversationEntry(conversation, instrumento) {
   if (!conversation || !conversation.trim()) return '—';
-  return conversation.trim().split('\n').map((entry) => entry.trim()).filter(Boolean).at(-1) || '—';
+  const entries = conversation.trim().split('\n')
+    .map((entry) => removeLegacyAutomaticContact(entry.trim(), instrumento))
+    .filter(Boolean);
+  return entries.at(-1) || '—';
 }
 
 async function readResponse(response) {
@@ -211,7 +228,7 @@ function renderLeads(leads) {
     addCell(row, lead.asignadoA || '—', 'Asignado a');
     addCell(row, lead.telefono || '—', 'Teléfono');
     addCell(row, lead.edad === null || lead.edad === undefined ? '—' : String(lead.edad), 'Edad');
-    addCell(row, latestConversationEntry(lead.conversacion), 'Última actividad');
+    addCell(row, latestConversationEntry(lead.conversacion, lead.instrumento), 'Última actividad');
 
     const date = lead.creadoEn ? new Date(lead.creadoEn) : null;
     addCell(row, date && !Number.isNaN(date.getTime())
