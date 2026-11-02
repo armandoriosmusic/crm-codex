@@ -126,8 +126,8 @@ td a:hover { text-decoration: underline; }
 .state-pill.tag-nuevo::before { background: #5d91cf; }
 .state-pill.tag-no-contesta { background: #f0f1ef; color: #69716b; }
 .state-pill.tag-no-contesta::before { background: #969e97; }
-.state-pill.tag-en-contacto { background: #e5f0fb; color: #3f6d99; }
-.state-pill.tag-en-contacto::before { background: #6596c1; }
+.state-pill.tag-en-contacto { background: #e2f4f5; color: #287a83; }
+.state-pill.tag-en-contacto::before { background: #4fa4ad; }
 .state-pill.tag-pendiente-de-clase-prueba { background: #fff3d9; color: #966b22; }
 .state-pill.tag-pendiente-de-clase-prueba::before { background: #d19a34; }
 .state-pill.tag-clase-de-prueba-agendada { background: #e9eafb; color: #5c61a1; }
