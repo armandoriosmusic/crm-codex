@@ -35,3 +35,18 @@ test('normaliza Principiante e importa una edad indicada en años', () => {
   assert.equal(lead.edadUnidad, 'años');
   assert.equal(lead.nivel, 'Iniciación');
 });
+
+test('asigna las nuevas actividades infantiles desde el asunto de Gmail', () => {
+  const lead = parseLeadMessage({
+    id: 'actividad-infantil',
+    payload: {
+      headers: [{ name: 'Subject', value: 'Cañaveral Expresión y Educación musical' }],
+      mimeType: 'text/plain',
+      body: {
+        data: Buffer.from(['Nombre', 'Prueba', 'Correo electrónico', 'prueba@example.test'].join('\n')).toString('base64url'),
+      },
+    },
+  });
+
+  assert.equal(lead.instrumento, 'Expresión y Educación musical (5 y 6 años)');
+});

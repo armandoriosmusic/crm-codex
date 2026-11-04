@@ -319,7 +319,8 @@ const opciones = {
   ],
   instrumentos: [
     'Música para bebés (desde 6 meses)',
-    'Música y movimiento (desde 3 años)',
+    'Música y movimiento (3 y 4 años)',
+    'Expresión y Educación musical (5 y 6 años)',
     'Piano',
     'Canto',
     'Violín',

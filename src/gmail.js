@@ -138,7 +138,8 @@ function subjectInstrument(subject) {
   const interest = match[1].trim();
   const options = [
     ['musica para bebes', 'Música para bebés (desde 6 meses)'],
-    ['musica y movimiento', 'Música y movimiento (desde 3 años)'],
+    ['musica y movimiento', 'Música y movimiento (3 y 4 años)'],
+    ['expresion y educacion musical', 'Expresión y Educación musical (5 y 6 años)'],
     ['piano', 'Piano'],
     ['canto', 'Canto'],
     ['violin', 'Violín'],
