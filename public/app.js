@@ -124,7 +124,7 @@ function availabilityLabels(summary) {
       : franja.inicio
         ? `A partir de las ${franja.inicio}`
         : franja.momento || '';
-    if (days && hours) labels.push({ text: `${days}\n${hours}`, type: '' });
+    if (days) labels.push({ text: hours ? `${days}\n${hours}` : days, type: '' });
   }
   for (const restriction of summary.restricciones || []) labels.push({ text: restriction, type: 'restriction' });
   if (summary.pendiente) labels.push({ text: 'Pendiente de concretar', type: 'pending' });

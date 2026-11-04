@@ -14,6 +14,7 @@ const AVAILABILITY_INTERPRETATION_INSTRUCTIONS = [
   'Conserva la incertidumbre en nota o pendiente solo cuando no haya una interpretación razonable.',
   'Usa únicamente los días Lunes, Martes, Miércoles, Jueves, Viernes, Sábado y Domingo.',
   'Cuando el texto indique días disponibles, inclúyelos siempre en la franja correspondiente; son un dato esencial y no debes omitirlos.',
+  'Si indica días pero no hora, devuelve igualmente una franja con esos días y con inicio, fin y momento vacíos. No uses pendiente ni una nota para señalar que falta la hora.',
   'Para "todos los días" incluye los siete días.',
   'inicio y fin usan HH:MM o cadena vacía.',
   'momento solo puede ser cadena vacía, mañana, mediodía, tarde, noche o última hora.',
@@ -40,7 +41,7 @@ function normaliseAvailabilitySummary(value) {
     const inicio = cleanText(franja.inicio, 5);
     const fin = cleanText(franja.fin, 5);
     const momento = MOMENTOS.includes(franja.momento) ? franja.momento : '';
-    if (!dias.length || (!inicio && !fin && !momento)) return null;
+    if (!dias.length) return null;
     return { dias, inicio, fin, momento };
   }).filter(Boolean).slice(0, 8) : [];
 
@@ -52,7 +53,8 @@ function normaliseAvailabilitySummary(value) {
     franjas,
     restricciones,
     nota: cleanText(value.nota, 160),
-    pendiente: Boolean(value.pendiente),
+    // Una lista de días ya es información accionable, aunque falte concretar la hora.
+    pendiente: Boolean(value.pendiente) && franjas.length === 0,
   };
 }
 

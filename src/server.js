@@ -589,6 +589,9 @@ app.post('/leads', (req, res) => {
   if (typeof nombre !== 'string' || !nombre.trim()) {
     return res.status(400).json({ error: 'El campo nombre es obligatorio.' });
   }
+  if (typeof instrumento !== 'string' || !instrumento.trim()) {
+    return res.status(400).json({ error: 'El campo instrumento es obligatorio.' });
+  }
 
   const validaciones = [
     ['estado', estado, opciones.estados],

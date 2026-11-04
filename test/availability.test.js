@@ -35,12 +35,26 @@ test('normaliza una disponibilidad con varias franjas y restricciones', () => {
   });
 });
 
-test('descarta franjas incompletas y mantiene un resumen seguro ante JSON inválido', () => {
+test('descarta franjas sin días y mantiene un resumen seguro ante JSON inválido', () => {
   assert.deepEqual(normaliseAvailabilitySummary({
-    franjas: [{ dias: ['Lunes'], inicio: '', fin: '', momento: '' }],
+    franjas: [{ dias: [], inicio: '', fin: '', momento: '' }],
     restricciones: [null],
     nota: 7,
     pendiente: 'sí',
   }), { ...emptyAvailabilitySummary(), pendiente: true });
   assert.deepEqual(parseAvailabilitySummary('{no es JSON}'), emptyAvailabilitySummary());
+});
+
+test('conserva los días aunque el contacto no haya indicado una hora', () => {
+  assert.deepEqual(normaliseAvailabilitySummary({
+    franjas: [{ dias: ['Jueves', 'Lunes', 'Martes'], inicio: '', fin: '', momento: '' }],
+    restricciones: [],
+    nota: '',
+    pendiente: true,
+  }), {
+    franjas: [{ dias: ['Lunes', 'Martes', 'Jueves'], inicio: '', fin: '', momento: '' }],
+    restricciones: [],
+    nota: '',
+    pendiente: false,
+  });
 });
