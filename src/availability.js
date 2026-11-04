@@ -1,6 +1,26 @@
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const MOMENTOS = ['', 'mañana', 'mediodía', 'tarde', 'noche', 'última hora'];
 
+// Horario operativo comunicado por Música de los Ríos: las clases pueden
+// empezar excepcionalmente a las 09:00, pero predominan las de tarde y pueden
+// terminar a las 22:00. Esta regla evita que expresiones coloquiales como
+// "a las 5,30" queden pendientes innecesariamente.
+const AVAILABILITY_INTERPRETATION_INSTRUCTIONS = [
+  'Extrae disponibilidad para clases de música a partir de un texto en español.',
+  'No inventes días ni horarios que el texto no sugiera.',
+  'Las clases pueden empezar excepcionalmente a las 09:00, pero normalmente son de tarde y pueden terminar a las 22:00.',
+  'Por tanto, una hora entre 1 y 8 sin AM/PM ni mención de mañana, tarde o noche se entiende como tarde: por ejemplo, "5,30" o "5:30" significa 17:30. No la marques como pendiente solo por esa ambigüedad.',
+  'Si dice expresamente mañana, AM o una hora antes de las 9, respeta esa indicación. Para las horas 9 a 12 sin contexto conserva la hora literal y no inventes AM o PM.',
+  'Conserva la incertidumbre en nota o pendiente solo cuando no haya una interpretación razonable.',
+  'Usa únicamente los días Lunes, Martes, Miércoles, Jueves, Viernes, Sábado y Domingo.',
+  'Cuando el texto indique días disponibles, inclúyelos siempre en la franja correspondiente; son un dato esencial y no debes omitirlos.',
+  'Para "todos los días" incluye los siete días.',
+  'inicio y fin usan HH:MM o cadena vacía.',
+  'momento solo puede ser cadena vacía, mañana, mediodía, tarde, noche o última hora.',
+  'Las imposibilidades van en restricciones.',
+  'No incluyas nombres, emails ni información ajena a la disponibilidad.',
+].join(' ');
+
 function emptyAvailabilitySummary() {
   return { franjas: [], restricciones: [], nota: '', pendiente: false };
 }
@@ -55,6 +75,7 @@ function hasAvailabilitySummary(summary) {
 module.exports = {
   DIAS,
   MOMENTOS,
+  AVAILABILITY_INTERPRETATION_INSTRUCTIONS,
   emptyAvailabilitySummary,
   hasAvailabilitySummary,
   normaliseAvailabilitySummary,

@@ -1,10 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  AVAILABILITY_INTERPRETATION_INSTRUCTIONS,
   emptyAvailabilitySummary,
   normaliseAvailabilitySummary,
   parseAvailabilitySummary,
 } = require('../src/availability');
+
+test('indica que las horas ambiguas de 1 a 8 se interpretan como tarde', () => {
+  assert.match(AVAILABILITY_INTERPRETATION_INSTRUCTIONS, /"5,30".*17:30/);
+  assert.match(AVAILABILITY_INTERPRETATION_INSTRUCTIONS, /No la marques como pendiente/);
+  assert.match(AVAILABILITY_INTERPRETATION_INSTRUCTIONS, /días disponibles.*siempre/i);
+});
 
 test('normaliza una disponibilidad con varias franjas y restricciones', () => {
   const summary = normaliseAvailabilitySummary({

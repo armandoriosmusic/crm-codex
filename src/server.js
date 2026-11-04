@@ -5,6 +5,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const gmail = require('./gmail');
 const {
+  AVAILABILITY_INTERPRETATION_INSTRUCTIONS,
   emptyAvailabilitySummary,
   hasAvailabilitySummary,
   normaliseAvailabilitySummary,
@@ -460,7 +461,7 @@ async function interpretAvailabilityWithAi(text) {
         input: [
           {
             role: 'system',
-            content: 'Extrae disponibilidad para clases de música a partir de un texto en español. No inventes días ni horarios. Conserva la incertidumbre en nota o pendiente. Usa únicamente los días Lunes, Martes, Miércoles, Jueves, Viernes, Sábado y Domingo. Para "todos los días" incluye los siete días. inicio y fin usan HH:MM o cadena vacía. momento solo puede ser cadena vacía, mañana, mediodía, tarde, noche o última hora. Las imposibilidades van en restricciones. No incluyas nombres, emails ni información ajena a la disponibilidad.',
+            content: AVAILABILITY_INTERPRETATION_INSTRUCTIONS,
           },
           { role: 'user', content: text },
         ],

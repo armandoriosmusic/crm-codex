@@ -89,6 +89,10 @@ Cada lead puede conservar el texto original de disponibilidad comunicado durante
 
 La interpretación con IA es opcional. Si no están definidas `OPENAI_API_KEY` y `OPENAI_AVAILABILITY_MODEL`, el CRM no hace ninguna llamada externa y continúa guardando el texto original. El modelo de ejemplo `gpt-6-luna` está elegido para esta extracción breve y de bajo coste. Cuando está activada, solo se envía el texto introducido en el campo Disponibilidad; no se envían el nombre, email, teléfono ni el resto de datos del lead. El texto original siempre se conserva y el resumen se puede eliminar sin borrar ese texto.
 
+La interpretación conoce el horario operativo: las clases pueden empezar excepcionalmente a las 09:00, pero predominan las de tarde y pueden acabar a las 22:00. Por ello, cuando un contacto escribe una hora entre 1 y 8 sin aclarar mañana/tarde (por ejemplo, “5,30”), se propone como horario de tarde (`17:30`).
+
+Las franjas se muestran de manera compacta en la lista: `L M X J V S` para los días (domingo usa `D` si se indica) y el horario debajo de ese dato, por ejemplo `M J` y, debajo, `A partir de las 17:30`.
+
 ## Sincronización con Gmail
 
 El botón **Sincronizar Gmail** busca mensajes enviados al buzón corporativo cuyo asunto contenga `Cañaveral`. Importa los datos del formulario, usa el email de `Responder a` como contacto y actualiza el lead existente cuando ese email ya está registrado. El texto del evento se añade a `conversacion` para conservar el historial.

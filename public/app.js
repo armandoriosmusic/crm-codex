@@ -105,17 +105,26 @@ function hasAvailabilitySummary(summary) {
 function availabilityLabels(summary) {
   if (!hasAvailabilitySummary(summary)) return [];
   const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const dayCodes = {
+    Lunes: 'L',
+    Martes: 'M',
+    Miércoles: 'X',
+    Jueves: 'J',
+    Viernes: 'V',
+    Sábado: 'S',
+    Domingo: 'D',
+  };
   const labels = [];
   for (const franja of summary.franjas || []) {
     const days = franja.dias?.length === dayNames.length
       ? 'Todos los días'
-      : (franja.dias || []).map((day) => day.slice(0, 3)).join(' / ');
+      : (franja.dias || []).map((day) => dayCodes[day]).filter(Boolean).join(' ');
     const hours = franja.inicio && franja.fin
-      ? `${franja.inicio}–${franja.fin}`
+      ? `De ${franja.inicio} a ${franja.fin}`
       : franja.inicio
-        ? `desde ${franja.inicio}`
+        ? `A partir de las ${franja.inicio}`
         : franja.momento || '';
-    if (days && hours) labels.push({ text: `${days} · ${hours}`, type: '' });
+    if (days && hours) labels.push({ text: `${days}\n${hours}`, type: '' });
   }
   for (const restriction of summary.restricciones || []) labels.push({ text: restriction, type: 'restriction' });
   if (summary.pendiente) labels.push({ text: 'Pendiente de concretar', type: 'pending' });
