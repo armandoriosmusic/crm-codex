@@ -77,6 +77,16 @@
               <span>Nivel</span>
               <select id="nivel" name="nivel"><option value="">Seleccionar nivel</option></select>
             </label>
+            <div class="field field-wide availability-field">
+              <span>Disponibilidad</span>
+              <textarea id="disponibilidad-texto" name="disponibilidadTexto" rows="2" maxlength="1000" placeholder="Ej.: lunes y miércoles desde las 17:30; martes y jueves no puede"></textarea>
+              <div class="availability-actions">
+                <button id="interpret-availability-button" class="button-secondary" type="button">✦ Interpretar disponibilidad</button>
+                <button id="clear-availability-summary-button" class="button-text" type="button" hidden>Quitar resumen</button>
+              </div>
+              <div id="availability-preview" class="availability-preview" hidden aria-live="polite"></div>
+              <p id="availability-message" class="availability-message" role="status"></p>
+            </div>
             <label class="field">
               <span>Asignado a</span>
               <input id="asignadoA" name="asignadoA" type="text" placeholder="Persona responsable">
@@ -175,6 +185,7 @@
                   <th scope="col">Estado</th>
                   <th scope="col">Instrumento</th>
                   <th scope="col">Nivel</th>
+                  <th scope="col">Disponibilidad</th>
                   <th scope="col">Asignado a</th>
                   <th scope="col">Teléfono</th>
                   <th scope="col">Edad</th>

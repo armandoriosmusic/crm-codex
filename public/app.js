@@ -4,6 +4,11 @@ const emailInput = document.querySelector('#email');
 const estadoInput = document.querySelector('#estado');
 const instrumentoInput = document.querySelector('#instrumento');
 const nivelInput = document.querySelector('#nivel');
+const disponibilidadTextoInput = document.querySelector('#disponibilidad-texto');
+const interpretAvailabilityButton = document.querySelector('#interpret-availability-button');
+const clearAvailabilitySummaryButton = document.querySelector('#clear-availability-summary-button');
+const availabilityPreview = document.querySelector('#availability-preview');
+const availabilityMessage = document.querySelector('#availability-message');
 const submitButton = document.querySelector('#submit-button');
 const formMessage = document.querySelector('#form-message');
 const tableBody = document.querySelector('#leads-table-body');
@@ -38,6 +43,7 @@ const leadStatValues = {
 };
 let editingLeadId = null;
 let allLeads = [];
+let availabilitySummaryDraft = emptyAvailabilitySummary();
 
 function addCell(row, value, label) {
   const cell = document.createElement('td');
@@ -88,6 +94,75 @@ function latestConversationEntry(conversation, instrumento) {
   return entries.at(-1) || '—';
 }
 
+function emptyAvailabilitySummary() {
+  return { franjas: [], restricciones: [], nota: '', pendiente: false };
+}
+
+function hasAvailabilitySummary(summary) {
+  return summary && (summary.franjas?.length || summary.restricciones?.length || summary.nota || summary.pendiente);
+}
+
+function availabilityLabels(summary) {
+  if (!hasAvailabilitySummary(summary)) return [];
+  const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const labels = [];
+  for (const franja of summary.franjas || []) {
+    const days = franja.dias?.length === dayNames.length
+      ? 'Todos los días'
+      : (franja.dias || []).map((day) => day.slice(0, 3)).join(' / ');
+    const hours = franja.inicio && franja.fin
+      ? `${franja.inicio}–${franja.fin}`
+      : franja.inicio
+        ? `desde ${franja.inicio}`
+        : franja.momento || '';
+    if (days && hours) labels.push({ text: `${days} · ${hours}`, type: '' });
+  }
+  for (const restriction of summary.restricciones || []) labels.push({ text: restriction, type: 'restriction' });
+  if (summary.pendiente) labels.push({ text: 'Pendiente de concretar', type: 'pending' });
+  if (summary.nota) labels.push({ text: summary.nota, type: 'note' });
+  return labels;
+}
+
+function renderAvailabilityPreview(message = '', error = false) {
+  const labels = availabilityLabels(availabilitySummaryDraft);
+  availabilityPreview.replaceChildren();
+  availabilityPreview.hidden = labels.length === 0;
+  for (const label of labels) {
+    const tag = document.createElement('span');
+    tag.className = `availability-tag ${label.type}`.trim();
+    tag.textContent = label.text;
+    availabilityPreview.append(tag);
+  }
+  clearAvailabilitySummaryButton.hidden = labels.length === 0;
+  availabilityMessage.textContent = message;
+  availabilityMessage.classList.toggle('error', error);
+}
+
+function addAvailabilityCell(row, lead) {
+  const cell = document.createElement('td');
+  cell.dataset.label = 'Disponibilidad';
+  const labels = availabilityLabels(lead.disponibilidadResumen);
+  if (labels.length) {
+    const container = document.createElement('div');
+    container.className = 'availability-preview';
+    for (const label of labels.slice(0, 3)) {
+      const tag = document.createElement('span');
+      tag.className = `availability-tag ${label.type}`.trim();
+      tag.textContent = label.text;
+      container.append(tag);
+    }
+    cell.append(container);
+  } else if (lead.disponibilidadTexto) {
+    const text = document.createElement('span');
+    text.className = 'availability-text';
+    text.textContent = lead.disponibilidadTexto;
+    cell.append(text);
+  } else {
+    cell.textContent = '—';
+  }
+  row.append(cell);
+}
+
 async function readResponse(response) {
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) return response.json();
@@ -125,6 +200,9 @@ function startEditing(lead) {
   form.elements.telefono.value = lead.telefono || '';
   form.elements.edad.value = lead.edad ?? '';
   form.elements.conversacion.value = lead.conversacion || '';
+  disponibilidadTextoInput.value = lead.disponibilidadTexto || '';
+  availabilitySummaryDraft = lead.disponibilidadResumen || emptyAvailabilitySummary();
+  renderAvailabilityPreview('Resumen guardado. Puedes reinterpretarlo si cambia la disponibilidad.');
   submitButton.innerHTML = 'Guardar cambios <span aria-hidden="true">↗</span>';
   cancelEditButton.hidden = false;
   formMessage.textContent = 'Editando este lead.';
@@ -139,6 +217,8 @@ function cancelEditing() {
   formTitle.textContent = 'Añadir un lead';
   submitButton.innerHTML = 'Guardar lead <span aria-hidden="true">↗</span>';
   cancelEditButton.hidden = true;
+  availabilitySummaryDraft = emptyAvailabilitySummary();
+  renderAvailabilityPreview();
   formMessage.textContent = '';
   formMessage.classList.remove('error', 'success');
 }
@@ -225,9 +305,12 @@ function renderLeads(leads) {
 
     addTagCell(row, lead.instrumento, 'instrumento', 'Instrumento');
     addTagCell(row, lead.nivel, 'nivel', 'Nivel');
+    addAvailabilityCell(row, lead);
     addCell(row, lead.asignadoA || '—', 'Asignado a');
     addCell(row, lead.telefono || '—', 'Teléfono');
-    addCell(row, lead.edad === null || lead.edad === undefined ? '—' : String(lead.edad), 'Edad');
+    addCell(row, lead.edad === null || lead.edad === undefined
+      ? '—'
+      : `${lead.edad}${lead.edadUnidad === 'meses' ? ' meses' : ''}`, 'Edad');
     addCell(row, latestConversationEntry(lead.conversacion, lead.instrumento), 'Última actividad');
 
     const date = lead.creadoEn ? new Date(lead.creadoEn) : null;
@@ -338,6 +421,8 @@ form.addEventListener('submit', async (event) => {
         telefono: form.elements.telefono.value.trim(),
         edad: form.elements.edad.value === '' ? undefined : Number(form.elements.edad.value),
         conversacion: form.elements.conversacion.value.trim(),
+        disponibilidadTexto: disponibilidadTextoInput.value.trim(),
+        disponibilidadResumen: availabilitySummaryDraft,
       }),
     });
     const result = await response.json();
@@ -360,6 +445,16 @@ form.addEventListener('submit', async (event) => {
 
 refreshButton.addEventListener('click', loadLeads);
 gmailSyncButton.addEventListener('click', syncGmail);
+interpretAvailabilityButton.addEventListener('click', interpretAvailability);
+clearAvailabilitySummaryButton.addEventListener('click', () => {
+  availabilitySummaryDraft = emptyAvailabilitySummary();
+  renderAvailabilityPreview('Resumen eliminado. El texto original se conserva.');
+});
+disponibilidadTextoInput.addEventListener('input', () => {
+  if (!hasAvailabilitySummary(availabilitySummaryDraft)) return;
+  availabilitySummaryDraft = emptyAvailabilitySummary();
+  renderAvailabilityPreview('El texto ha cambiado. Interprétalo de nuevo antes de guardar si quieres etiquetas actualizadas.');
+});
 exportButton.addEventListener('click', () => {
   window.location.href = '/leads/export.csv';
 });
@@ -415,6 +510,35 @@ async function initializeAuthentication() {
 }
 
 initializeAuthentication();
+
+async function interpretAvailability() {
+  const texto = disponibilidadTextoInput.value.trim();
+  if (!texto) {
+    renderAvailabilityPreview('Escribe primero la disponibilidad comunicada.', true);
+    disponibilidadTextoInput.focus();
+    return;
+  }
+  interpretAvailabilityButton.disabled = true;
+  interpretAvailabilityButton.textContent = 'Interpretando…';
+  renderAvailabilityPreview('Preparando una propuesta para que la revises.');
+  try {
+    const response = await fetch('/availability/interpret', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ texto }),
+    });
+    const result = await readResponse(response);
+    if (!response.ok) throw new Error(result.error || 'No se pudo interpretar la disponibilidad.');
+    availabilitySummaryDraft = result.summary || emptyAvailabilitySummary();
+    renderAvailabilityPreview('Propuesta lista. Revísala y guarda el lead para conservarla.');
+  } catch (error) {
+    renderAvailabilityPreview(error.message || 'No se pudo interpretar la disponibilidad.', true);
+  } finally {
+    interpretAvailabilityButton.disabled = false;
+    interpretAvailabilityButton.textContent = '✦ Interpretar disponibilidad';
+  }
+}
 
 async function syncGmail({ automatic = false } = {}) {
   gmailSyncButton.disabled = true;

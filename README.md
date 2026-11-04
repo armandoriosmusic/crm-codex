@@ -79,8 +79,15 @@ El servidor lee las variables de entorno del sistema y, si existe, el archivo lo
 | `CRM_ARMANDO_PASSWORD` | Contraseña inicial de Armando, solo cuando todavía no existen usuarios. | Definir en `.env` |
 | `CRM_HUMBERTO_PASSWORD` | Contraseña inicial de Humberto, solo cuando todavía no existen usuarios. | Definir en `.env` |
 | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REDIRECT_URI` | Integración opcional con Gmail. | Ver `.env.example` |
+| `OPENAI_API_KEY`, `OPENAI_AVAILABILITY_MODEL` | Interpretación opcional de disponibilidad. Ambas variables son necesarias para activarla. | Ver `.env.example` |
 
 No incluyas valores reales de estas variables en el repositorio. Los usuarios iniciales se crean una única vez en la base de datos; cambiar las contraseñas de arranque después no modifica usuarios ya creados.
+
+## Disponibilidad de los leads
+
+Cada lead puede conservar el texto original de disponibilidad comunicado durante la conversación. La interfaz permite solicitar una propuesta visual de franjas, restricciones y notas antes de guardar el lead. La propuesta no se guarda automáticamente: revisa el resultado y pulsa **Guardar lead** para confirmarlo.
+
+La interpretación con IA es opcional. Si no están definidas `OPENAI_API_KEY` y `OPENAI_AVAILABILITY_MODEL`, el CRM no hace ninguna llamada externa y continúa guardando el texto original. El modelo de ejemplo `gpt-6-luna` está elegido para esta extracción breve y de bajo coste. Cuando está activada, solo se envía el texto introducido en el campo Disponibilidad; no se envían el nombre, email, teléfono ni el resto de datos del lead. El texto original siempre se conserva y el resumen se puede eliminar sin borrar ese texto.
 
 ## Sincronización con Gmail
 
@@ -130,39 +137,52 @@ http://localhost:3001/health
 
 Devuelve únicamente `{"status":"ok"}` cuando el servidor y SQLite están disponibles.
 
-## Preparación para producción futura
+## Producción: Cañaveral
 
-Esta sección prepara el proyecto para un futuro servidor, pero no crea ni configura ningún recurso externo.
+El CRM de la sede Cañaveral está desplegado para uso interno en `https://crm.musicadelosrios.com`. El sitio principal `musicadelosrios.com` continúa separado en WordPress; este despliegue no modifica su contenido ni su configuración.
 
-1. Instala Node.js 22 y npm en el servidor futuro. Desde la carpeta del proyecto, instala exactamente las dependencias bloqueadas:
+La arquitectura de producción es:
 
-   ```bash
-   npm ci
-   ```
+```text
+Navegador → HTTPS (Caddy) → Express en 127.0.0.1:3000 → SQLite
+```
 
-2. Crea un `.env` fuera del control de versiones y usa valores reales solo en ese servidor. Como mínimo, configura:
+- Caddy gestiona HTTPS y redirige HTTP a HTTPS.
+- El servicio `crm-musicadelosrios` ejecuta Express mediante `systemd`.
+- Express no está expuesto directamente a Internet: escucha solo en `127.0.0.1:3000`.
+- La base de datos de producción se mantiene fuera del código mediante `CRM_DATABASE_PATH=/var/lib/crm-musicadelosrios/crm.sqlite`.
+- Las variables reales se guardan únicamente en `/etc/crm-musicadelosrios/.env`, fuera de Git.
 
-   ```text
-   NODE_ENV=production
-   PORT=3000
-   CRM_DATABASE_PATH=/var/lib/crm-musicadelosrios/crm.sqlite
-   ```
+La comprobación interna de disponibilidad es:
 
-   Añade también las contraseñas iniciales únicamente si se va a crear una base de datos nueva y vacía. No guardes secretos en el código ni en Git.
+```text
+http://127.0.0.1:3000/health
+```
 
-3. Conserva la base SQLite fuera de la carpeta de código mediante `CRM_DATABASE_PATH`. Antes de un despliegue real, realiza y verifica una copia de seguridad de la base junto con sus archivos WAL y SHM cuando existan.
+Debe devolver únicamente `{"status":"ok"}`. El CRM requiere una sesión autenticada para consultar datos o sincronizar Gmail.
 
-4. Arranca el proceso con:
+El CRM es de uso interno. La aplicación devuelve `X-Robots-Tag: noindex, nofollow, noarchive` y la página incluye una directiva equivalente. Esto reduce la indexación accidental, pero no sustituye la autenticación.
 
-   ```bash
-   npm start
-   ```
+### Gmail en producción
 
-5. Comprueba localmente en el servidor `http://127.0.0.1:3000/health`. La publicación mediante HTTPS, proxy inverso, DNS y dominio se configurarán en una fase posterior.
+La integración usa OAuth de Google con permiso de solo lectura. La URI autorizada de producción debe ser exactamente:
 
-SQLite se mantiene por ahora para la única sede Cañaveral. Esta preparación no añade sedes, no migra datos reales y no publica el CRM en Internet.
+```text
+https://crm.musicadelosrios.com/gmail/oauth/callback
+```
 
-El CRM es de uso interno. La aplicación devuelve `X-Robots-Tag: noindex, nofollow, noarchive` y la página incluye una directiva equivalente. Esto reduce la indexación accidental, pero no sustituye la autenticación ni la futura configuración de HTTPS y del proxy inverso.
+La URI local `http://localhost:3001/gmail/oauth/callback` debe mantenerse si se va a seguir utilizando Gmail desde el entorno local. El token de OAuth se guarda fuera de Git en `data/gmail-token.json` con permisos restringidos; no debe copiarse al repositorio ni mostrarse en terminales o conversaciones.
+
+### Copias de seguridad y recuperación
+
+La copia automática obtiene una instantánea consistente de SQLite mediante `.backup`, la conserva localmente en el Mac y valida su integridad con `PRAGMA quick_check` usando el modo `immutable=1`.
+
+- El CRM continúa funcionando aunque el Mac esté apagado.
+- La copia local programada se ejecuta cuando el Mac está encendido y la sesión de Armando está iniciada.
+- La retención actual conserva las copias locales durante 30 días y las copias temporales del servidor durante 2 días.
+- Una copia de base de datos no incluye el token de Gmail; tras reconstruir un servidor desde una copia habría que autorizar Gmail de nuevo.
+
+Antes de restaurar una copia, valida primero una copia de prueba y confirma que los conteos esperados aparecen. No copies directamente una base SQLite activa ni sobrescribas la base de producción sin una copia previa y autorización expresa.
 
 ## API disponible
 
@@ -175,6 +195,7 @@ La interfaz utiliza estos endpoints:
 | `POST` | `/logout` | Cierra la sesión actual. |
 | `GET` | `/health` | Comprueba servidor y SQLite sin devolver información sensible. |
 | `GET` | `/options` | Devuelve las opciones válidas de estados, instrumentos y niveles. |
+| `POST` | `/availability/interpret` | Propone un resumen visual de disponibilidad, sin guardarlo. Requiere la IA configurada. |
 | `GET` | `/leads` | Devuelve todos los leads, ordenados del más reciente al más antiguo. |
 | `POST` | `/leads` | Valida y crea un lead. |
 | `PUT` | `/leads/:id` | Actualiza un lead existente. |

@@ -70,6 +70,18 @@ h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.45px; }
 .field input::placeholder, .field textarea::placeholder { color: #a7aca7; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: #6c9277; box-shadow: 0 0 0 3px #e9f1eb; }
 .field-wide { grid-column: span 2; }
+.availability-field { align-content: start; }
+.availability-field textarea { min-height: 58px; }
+.availability-actions { display: flex; align-items: center; gap: 10px; }
+.availability-actions .button-secondary { height: 34px; padding: 0 11px; }
+.availability-preview { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px; border: 1px solid #dfe8e0; border-radius: 8px; background: #f7faf7; }
+.availability-tag { display: inline-flex; max-width: 100%; padding: 4px 8px; border-radius: 14px; background: #e3f0e6; color: #356447; font-size: 10px; font-weight: 700; line-height: 1.3; }
+.availability-tag.restriction { background: #fff1dc; color: #98651f; }
+.availability-tag.pending { background: #f1eef9; color: #68558e; }
+.availability-tag.note { background: #eef1f2; color: #5d696d; }
+.availability-text { display: block; max-width: 230px; color: #58645b; font-size: 11px; line-height: 1.4; }
+.availability-message { min-height: 16px; margin: 0; color: var(--muted); font-size: 11px; }
+.availability-message.error { color: #a34838; }
 .form-actions { display: flex; grid-column: span 2; justify-content: flex-end; }
 .edit-actions { display: flex; align-items: center; gap: 9px; }
 .button-secondary { height: 43px; padding: 0 14px; border: 1px solid #dfe3dc; border-radius: 8px; background: #fff; color: #68736a; font-family: var(--display-font); font-size: 11px; font-weight: 700; cursor: pointer; }

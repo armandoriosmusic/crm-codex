@@ -148,6 +148,22 @@ function subjectInstrument(subject) {
   return options.find(([key]) => interest.startsWith(key))?.[1] || interest;
 }
 
+function parseAge(value) {
+  const text = value.trim().toLocaleLowerCase('es');
+  const match = text.match(/^(\d+)\s*(años?|anos?|mes(?:es)?)?\.?$/u);
+  if (!match) return { edad: null, edadUnidad: null };
+  return {
+    edad: Number(match[1]),
+    edadUnidad: match[2]?.startsWith('mes') ? 'meses' : 'años',
+  };
+}
+
+function normalizeLevel(value) {
+  const normalized = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').trim();
+  if (normalized === 'principiante') return 'Iniciación';
+  return value || null;
+}
+
 function parseLeadMessage(message) {
   const headers = message.payload?.headers || [];
   const subject = headerValue(headers, 'Subject');
@@ -157,16 +173,16 @@ function parseLeadMessage(message) {
   const email = valueAfterLabel(text, 'Correo electrónico') || headerValue(headers, 'Reply-To').match(/<([^>]+)>/)?.[1] || headerValue(headers, 'Reply-To');
   const nombre = valueAfterLabel(text, 'Nombre');
   if (!nombre || !email || !subjectInstrument(subject)) return null;
-  const ageText = valueAfterLabel(text, 'Edad del Alumno');
-  const age = ageText && /^\d+$/.test(ageText) ? Number(ageText) : null;
+  const age = parseAge(valueAfterLabel(text, 'Edad del Alumno'));
   return {
     gmailMessageId: message.id,
     nombre,
     email: email.trim().toLowerCase(),
     telefono: valueAfterLabel(text, 'Teléfono'),
-    edad: age,
+    edad: age.edad,
+    edadUnidad: age.edadUnidad,
     instrumento: subjectInstrument(subject),
-    nivel: valueAfterLabel(text, 'Nivel') || null,
+    nivel: normalizeLevel(valueAfterLabel(text, 'Nivel')),
     subject,
     receivedAt: new Date(Number(message.internalDate || Date.now())).toISOString(),
   };
@@ -207,5 +223,6 @@ module.exports = {
   isConfigured,
   listMessages,
   parseLeadMessage,
+  parseAge,
   readToken,
 };

@@ -4,6 +4,12 @@ const crypto = require('crypto');
 const path = require('path');
 const Database = require('better-sqlite3');
 const gmail = require('./gmail');
+const {
+  emptyAvailabilitySummary,
+  hasAvailabilitySummary,
+  normaliseAvailabilitySummary,
+  parseAvailabilitySummary,
+} = require('./availability');
 
 // Permite conservar la configuración local entre sesiones sin incluir secretos
 // en Git. Las variables ya definidas en el entorno tienen prioridad.
@@ -64,7 +70,10 @@ db.exec(`
     telefono TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT '',
     edad INTEGER,
+    edad_unidad TEXT NOT NULL DEFAULT 'años',
     conversacion TEXT NOT NULL DEFAULT '',
+    disponibilidad_texto TEXT NOT NULL DEFAULT '',
+    disponibilidad_resumen TEXT NOT NULL DEFAULT '[]',
     creado_en TEXT NOT NULL
   )
 `);
@@ -227,6 +236,9 @@ const existingColumns = new Set(db.prepare('PRAGMA table_info(leads)').all().map
 if (!existingColumns.has('gmail_message_id')) db.exec('ALTER TABLE leads ADD COLUMN gmail_message_id TEXT');
 if (!existingColumns.has('ultimo_contacto_en')) db.exec('ALTER TABLE leads ADD COLUMN ultimo_contacto_en TEXT');
 if (!existingColumns.has('contactos_count')) db.exec('ALTER TABLE leads ADD COLUMN contactos_count INTEGER NOT NULL DEFAULT 1');
+if (!existingColumns.has('edad_unidad')) db.exec("ALTER TABLE leads ADD COLUMN edad_unidad TEXT NOT NULL DEFAULT 'años'");
+if (!existingColumns.has('disponibilidad_texto')) db.exec("ALTER TABLE leads ADD COLUMN disponibilidad_texto TEXT NOT NULL DEFAULT ''");
+if (!existingColumns.has('disponibilidad_resumen')) db.exec("ALTER TABLE leads ADD COLUMN disponibilidad_resumen TEXT NOT NULL DEFAULT '[]'");
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS leads_gmail_message_id ON leads(gmail_message_id) WHERE gmail_message_id IS NOT NULL');
 
 app.use(express.json());
@@ -333,7 +345,10 @@ function serializeLead(row) {
     telefono: row.telefono,
     email: row.email,
     edad: row.edad,
+    edadUnidad: row.edad_unidad,
     conversacion: row.conversacion,
+    disponibilidadTexto: row.disponibilidad_texto,
+    disponibilidadResumen: parseAvailabilitySummary(row.disponibilidad_resumen),
     creadoEn: row.creado_en,
     ultimoContactoEn: row.ultimo_contacto_en,
   };
@@ -345,16 +360,16 @@ const statements = {
   listLeads: db.prepare('SELECT * FROM leads ORDER BY id DESC'),
   exportLeads: db.prepare(`
     SELECT nombre, email, estado, instrumento, nivel, asignado_a,
-      telefono, edad, conversacion, creado_en
+      telefono, edad, edad_unidad, conversacion, disponibilidad_texto, disponibilidad_resumen, creado_en
     FROM leads
     ORDER BY COALESCE(ultimo_contacto_en, creado_en) DESC, id DESC
   `),
   findLead: db.prepare('SELECT * FROM leads WHERE id = ?'),
   insertLead: db.prepare(`
     INSERT INTO leads
-      (nombre, estado, instrumento, nivel, asignado_a, telefono, email, edad, conversacion, creado_en)
+      (nombre, estado, instrumento, nivel, asignado_a, telefono, email, edad, conversacion, disponibilidad_texto, disponibilidad_resumen, creado_en)
     VALUES
-      (@nombre, @estado, @instrumento, @nivel, @asignadoA, @telefono, @email, @edad, @conversacion, @creadoEn)
+      (@nombre, @estado, @instrumento, @nivel, @asignadoA, @telefono, @email, @edad, @conversacion, @disponibilidadTexto, @disponibilidadResumen, @creadoEn)
   `),
   updateLead: db.prepare(`
     UPDATE leads SET
@@ -366,7 +381,9 @@ const statements = {
       telefono = @telefono,
       email = @email,
       edad = @edad,
-      conversacion = @conversacion
+      conversacion = @conversacion,
+      disponibilidad_texto = @disponibilidadTexto,
+      disponibilidad_resumen = @disponibilidadResumen
     WHERE id = @id
   `),
   deleteLead: db.prepare('DELETE FROM leads WHERE id = ?'),
@@ -375,9 +392,9 @@ const statements = {
   recordImportedMessage: db.prepare('INSERT INTO gmail_imported_messages (message_id, lead_id, received_at) VALUES (?, ?, ?)'),
   insertImportedLead: db.prepare(`
     INSERT INTO leads
-      (nombre, estado, instrumento, nivel, asignado_a, telefono, email, edad, conversacion, creado_en, gmail_message_id, ultimo_contacto_en, contactos_count)
+      (nombre, estado, instrumento, nivel, asignado_a, telefono, email, edad, edad_unidad, conversacion, creado_en, gmail_message_id, ultimo_contacto_en, contactos_count)
     VALUES
-      (@nombre, 'Nuevo', @instrumento, @nivel, '', @telefono, @email, @edad, @conversacion, @creadoEn, @gmailMessageId, @contactedAt, 1)
+      (@nombre, 'Nuevo', @instrumento, @nivel, '', @telefono, @email, @edad, @edadUnidad, @conversacion, @creadoEn, @gmailMessageId, @contactedAt, 1)
   `),
   updateImportedLead: db.prepare(`
     UPDATE leads SET
@@ -387,6 +404,7 @@ const statements = {
       telefono = @telefono,
       email = @email,
       edad = @edad,
+      edad_unidad = @edadUnidad,
       conversacion = @conversacion,
       gmail_message_id = @gmailMessageId,
       ultimo_contacto_en = @contactedAt,
@@ -400,9 +418,121 @@ const settings = {
   set: db.prepare('INSERT INTO crm_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
 };
 
+const availabilityTextMaxLength = 1000;
+
+function normaliseAvailabilityText(value) {
+  return typeof value === 'string' ? value.trim().slice(0, availabilityTextMaxLength) : '';
+}
+
+function availabilityAiIsConfigured() {
+  return Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_AVAILABILITY_MODEL);
+}
+
+function responseOutputText(response) {
+  if (typeof response.output_text === 'string') return response.output_text;
+  for (const item of response.output || []) {
+    for (const content of item.content || []) {
+      if (content.type === 'output_text' && typeof content.text === 'string') return content.text;
+    }
+  }
+  return '';
+}
+
+async function interpretAvailabilityWithAi(text) {
+  if (!availabilityAiIsConfigured()) {
+    const error = new Error('La interpretación con IA todavía no está configurada. Puedes guardar la disponibilidad original.');
+    error.status = 503;
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_AVAILABILITY_MODEL,
+        store: false,
+        input: [
+          {
+            role: 'system',
+            content: 'Extrae disponibilidad para clases de música a partir de un texto en español. No inventes días ni horarios. Conserva la incertidumbre en nota o pendiente. Usa únicamente los días Lunes, Martes, Miércoles, Jueves, Viernes, Sábado y Domingo. Para "todos los días" incluye los siete días. inicio y fin usan HH:MM o cadena vacía. momento solo puede ser cadena vacía, mañana, mediodía, tarde, noche o última hora. Las imposibilidades van en restricciones. No incluyas nombres, emails ni información ajena a la disponibilidad.',
+          },
+          { role: 'user', content: text },
+        ],
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'resumen_disponibilidad',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                franjas: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      dias: { type: 'array', items: { type: 'string', enum: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] } },
+                      inicio: { type: 'string' },
+                      fin: { type: 'string' },
+                      momento: { type: 'string', enum: ['', 'mañana', 'mediodía', 'tarde', 'noche', 'última hora'] },
+                    },
+                    required: ['dias', 'inicio', 'fin', 'momento'],
+                    additionalProperties: false,
+                  },
+                },
+                restricciones: { type: 'array', items: { type: 'string' } },
+                nota: { type: 'string' },
+                pendiente: { type: 'boolean' },
+              },
+              required: ['franjas', 'restricciones', 'nota', 'pendiente'],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const error = new Error('No se pudo interpretar la disponibilidad ahora. Puedes guardarla tal como está.');
+      error.status = 502;
+      throw error;
+    }
+    const payload = await response.json();
+    const output = responseOutputText(payload);
+    if (!output) throw new Error('La IA no devolvió un resumen válido. Puedes guardarlo manualmente.');
+    const summary = normaliseAvailabilitySummary(JSON.parse(output));
+    if (!hasAvailabilitySummary(summary)) {
+      throw new Error('La IA no pudo concretar la disponibilidad. Puedes guardar el texto original.');
+    }
+    return summary;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('La interpretación ha tardado demasiado. Puedes guardar el texto original.');
+    if (error instanceof SyntaxError) throw new Error('La IA devolvió un formato no válido. Puedes guardar el texto original.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 app.get('/leads', (req, res) => {
   const leads = statements.listLeads.all().map(serializeLead);
   res.json(leads);
+});
+
+app.post('/availability/interpret', async (req, res) => {
+  const text = normaliseAvailabilityText(req.body?.texto);
+  if (!text) return res.status(400).json({ error: 'Escribe primero la disponibilidad comunicada.' });
+  try {
+    res.json({ summary: await interpretAvailabilityWithAi(text) });
+  } catch (error) {
+    res.status(error.status || 502).json({ error: error.message || 'No se pudo interpretar la disponibilidad.' });
+  }
 });
 
 // Escapa valores para que comas, comillas y saltos de línea no rompan el CSV.
@@ -414,11 +544,18 @@ function escapeCsvValue(value) {
 app.get('/leads/export.csv', (req, res) => {
   const headers = [
     'Nombre', 'Email', 'Estado', 'Instrumento', 'Nivel', 'Asignado a',
-    'Teléfono', 'Edad', 'Conversación', 'Fecha de alta',
+    'Teléfono', 'Edad', 'Disponibilidad', 'Conversación', 'Fecha de alta',
   ];
   const rows = statements.exportLeads.all().map((lead) => [
     lead.nombre, lead.email, lead.estado, lead.instrumento, lead.nivel,
-    lead.asignado_a, lead.telefono, lead.edad, lead.conversacion, lead.creado_en,
+    lead.asignado_a,
+    lead.telefono,
+    lead.edad === null || lead.edad === undefined
+      ? ''
+      : `${lead.edad}${lead.edad_unidad === 'meses' ? ' meses' : ''}`,
+    lead.disponibilidad_texto,
+    lead.conversacion,
+    lead.creado_en,
   ]);
   const csv = [headers, ...rows]
     .map((row) => row.map(escapeCsvValue).join(','))
@@ -446,7 +583,7 @@ app.post('/leads', (req, res) => {
     return res.status(400).json({ error: 'El cuerpo de la petición debe ser un objeto JSON.' });
   }
 
-  const { nombre, estado, instrumento, nivel, asignadoA, telefono, email, edad, conversacion } = body;
+  const { nombre, estado, instrumento, nivel, asignadoA, telefono, email, edad, conversacion, disponibilidadTexto, disponibilidadResumen } = body;
 
   if (typeof nombre !== 'string' || !nombre.trim()) {
     return res.status(400).json({ error: 'El campo nombre es obligatorio.' });
@@ -463,10 +600,16 @@ app.post('/leads', (req, res) => {
     }
   }
 
-  for (const [campo, valor] of [['asignadoA', asignadoA], ['telefono', telefono], ['email', email], ['conversacion', conversacion]]) {
+  for (const [campo, valor] of [['asignadoA', asignadoA], ['telefono', telefono], ['email', email], ['conversacion', conversacion], ['disponibilidadTexto', disponibilidadTexto]]) {
     if (valor !== undefined && typeof valor !== 'string') {
       return res.status(400).json({ error: `El campo ${campo} debe ser texto.` });
     }
+  }
+  if (disponibilidadTexto?.length > availabilityTextMaxLength) {
+    return res.status(400).json({ error: `El campo disponibilidadTexto no puede superar ${availabilityTextMaxLength} caracteres.` });
+  }
+  if (disponibilidadResumen !== undefined && (!disponibilidadResumen || typeof disponibilidadResumen !== 'object' || Array.isArray(disponibilidadResumen))) {
+    return res.status(400).json({ error: 'El resumen de disponibilidad no es válido.' });
   }
   if (edad !== undefined && (!Number.isInteger(edad) || edad < 0)) {
     return res.status(400).json({ error: 'El campo edad debe ser un número entero igual o mayor que 0.' });
@@ -484,6 +627,8 @@ app.post('/leads', (req, res) => {
     email: email?.trim() ?? '',
     edad: edad ?? null,
     conversacion: conversacion ?? '',
+    disponibilidadTexto: normaliseAvailabilityText(disponibilidadTexto),
+    disponibilidadResumen: JSON.stringify(normaliseAvailabilitySummary(disponibilidadResumen)),
     creadoEn: new Date().toISOString(),
   };
 
@@ -499,7 +644,7 @@ function validateLead(body) {
     return 'El cuerpo de la petición debe ser un objeto JSON.';
   }
 
-  const { nombre, estado, instrumento, nivel, asignadoA, telefono, email, edad, conversacion } = body;
+  const { nombre, estado, instrumento, nivel, asignadoA, telefono, email, edad, conversacion, disponibilidadTexto, disponibilidadResumen } = body;
   if (typeof nombre !== 'string' || !nombre.trim()) {
     return 'El campo nombre es obligatorio.';
   }
@@ -514,10 +659,16 @@ function validateLead(body) {
     }
   }
 
-  for (const [campo, valor] of [['asignadoA', asignadoA], ['telefono', telefono], ['email', email], ['conversacion', conversacion]]) {
+  for (const [campo, valor] of [['asignadoA', asignadoA], ['telefono', telefono], ['email', email], ['conversacion', conversacion], ['disponibilidadTexto', disponibilidadTexto]]) {
     if (valor !== undefined && typeof valor !== 'string') {
       return `El campo ${campo} debe ser texto.`;
     }
+  }
+  if (disponibilidadTexto?.length > availabilityTextMaxLength) {
+    return `El campo disponibilidadTexto no puede superar ${availabilityTextMaxLength} caracteres.`;
+  }
+  if (disponibilidadResumen !== undefined && (!disponibilidadResumen || typeof disponibilidadResumen !== 'object' || Array.isArray(disponibilidadResumen))) {
+    return 'El resumen de disponibilidad no es válido.';
   }
   if (edad !== undefined && edad !== null && (!Number.isInteger(edad) || edad < 0)) {
     return 'El campo edad debe ser un número entero igual o mayor que 0.';
@@ -545,6 +696,8 @@ app.put('/leads/:id', (req, res) => {
     email: req.body.email?.trim() ?? '',
     edad: req.body.edad ?? null,
     conversacion: req.body.conversacion?.trim() ?? '',
+    disponibilidadTexto: normaliseAvailabilityText(req.body.disponibilidadTexto),
+    disponibilidadResumen: JSON.stringify(normaliseAvailabilitySummary(req.body.disponibilidadResumen)),
   });
   res.json(serializeLead(statements.findLead.get(id)));
 });
@@ -608,6 +761,7 @@ async function synchronizeGmail() {
         telefono: lead.telefono || existing.telefono,
         email: lead.email || existing.email,
         edad: lead.edad ?? existing.edad,
+        edadUnidad: lead.edadUnidad || existing.edad_unidad || 'años',
         conversacion: appendFollowUpContactEvent(existing.conversacion, lead),
         gmailMessageId: lead.gmailMessageId,
         contactedAt: lead.receivedAt,
@@ -622,6 +776,7 @@ async function synchronizeGmail() {
       telefono: lead.telefono,
       email: lead.email,
       edad: lead.edad,
+      edadUnidad: lead.edadUnidad || 'años',
       // El primer formulario ya queda reflejado por la fecha de alta. El
       // historial se reserva para seguimientos y contactos posteriores.
       conversacion: '',
