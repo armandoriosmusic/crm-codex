@@ -9,6 +9,11 @@ const interpretAvailabilityButton = document.querySelector('#interpret-availabil
 const clearAvailabilitySummaryButton = document.querySelector('#clear-availability-summary-button');
 const availabilityPreview = document.querySelector('#availability-preview');
 const availabilityMessage = document.querySelector('#availability-message');
+const familyToggle = document.querySelector('#family-toggle');
+const familyEditor = document.querySelector('#family-editor');
+const familyRows = document.querySelector('#family-rows');
+const familyRowTemplate = document.querySelector('#family-row-template');
+const addFamilyButton = document.querySelector('#add-family-member');
 const submitButton = document.querySelector('#submit-button');
 const formMessage = document.querySelector('#form-message');
 const tableBody = document.querySelector('#leads-table-body');
@@ -44,6 +49,78 @@ const leadStatValues = {
 let editingLeadId = null;
 let allLeads = [];
 let availabilitySummaryDraft = emptyAvailabilitySummary();
+let familyChanged = false;
+
+function showFamilyEditor(open) {
+  familyToggle.checked = open;
+  familyEditor.hidden = !open;
+  familyEditor.disabled = !open;
+}
+
+function addFamilyRow(familiar = {}) {
+  const row = familyRowTemplate.content.firstElementChild.cloneNode(true);
+  if (familiar.id !== undefined) row.dataset.id = familiar.id;
+  const name = row.querySelector('[name="familiarNombre"]');
+  const age = row.querySelector('[name="familiarEdad"]');
+  const instrument = row.querySelector('[name="familiarInstrumento"]');
+  for (const option of instrumentoInput.options) {
+    if (option.value) instrument.append(option.cloneNode(true));
+  }
+  name.value = familiar.nombre ?? '';
+  age.value = familiar.edad ?? '';
+  instrument.value = familiar.instrumento ?? '';
+  row.querySelector('button').addEventListener('click', () => {
+    row.remove();
+    familyChanged = true;
+    if (familyRows.children.length === 0) {
+      showFamilyEditor(false);
+      familyToggle.focus();
+    } else {
+      addFamilyButton.focus();
+    }
+  });
+  familyRows.append(row);
+  return name;
+}
+
+function loadFamilyEditor(familiares = []) {
+  familyRows.replaceChildren();
+  for (const familiar of familiares) addFamilyRow(familiar);
+  familyChanged = false;
+  showFamilyEditor(familiares.length > 0);
+}
+
+function familyPayload() {
+  if (!familyChanged || (!familyToggle.checked && familyRows.children.length)) return undefined;
+  return Array.from(familyRows.children, (row) => {
+    const edad = row.querySelector('[name="familiarEdad"]').value;
+    return {
+      id: row.dataset.id ? Number(row.dataset.id) : undefined,
+      nombre: row.querySelector('[name="familiarNombre"]').value.trim(),
+      edad: edad === '' ? null : Number(edad),
+      instrumento: row.querySelector('[name="familiarInstrumento"]').value || null,
+    };
+  }).filter(({ id, nombre, edad, instrumento }) => id !== undefined || nombre || edad !== null || instrumento);
+}
+
+function appendFamilySummary(cell, familiares = []) {
+  if (!familiares.length) return;
+  const format = ({ nombre, edad, instrumento }) =>
+    [nombre, edad == null ? '' : `${edad} años`, instrumento].filter(Boolean).join(' · ');
+  const extra = familiares.length - 1;
+  const details = document.createElement('details');
+  details.className = 'family-summary';
+  const summary = document.createElement('summary');
+  summary.textContent = `Familia: ${format(familiares[0])}${extra ? ` + ${extra}` : ''}`;
+  const list = document.createElement('ul');
+  for (const familiar of familiares) {
+    const item = document.createElement('li');
+    item.textContent = format(familiar);
+    list.append(item);
+  }
+  details.append(summary, list);
+  cell.append(details);
+}
 
 function addCell(row, value, label) {
   const cell = document.createElement('td');
@@ -211,6 +288,7 @@ function startEditing(lead) {
   form.elements.conversacion.value = lead.conversacion || '';
   disponibilidadTextoInput.value = lead.disponibilidadTexto || '';
   availabilitySummaryDraft = lead.disponibilidadResumen || emptyAvailabilitySummary();
+  loadFamilyEditor(lead.familiares);
   renderAvailabilityPreview('Resumen guardado. Puedes reinterpretarlo si cambia la disponibilidad.');
   submitButton.innerHTML = 'Guardar cambios <span aria-hidden="true">↗</span>';
   cancelEditButton.hidden = false;
@@ -227,6 +305,7 @@ function cancelEditing() {
   submitButton.innerHTML = 'Guardar lead <span aria-hidden="true">↗</span>';
   cancelEditButton.hidden = true;
   availabilitySummaryDraft = emptyAvailabilitySummary();
+  loadFamilyEditor();
   renderAvailabilityPreview();
   formMessage.textContent = '';
   formMessage.classList.remove('error', 'success');
@@ -290,7 +369,13 @@ function renderLeads(leads) {
 
   for (const lead of leads) {
     const row = document.createElement('tr');
-    addCell(row, lead.nombre || '—', 'Nombre');
+    const nameCell = document.createElement('td');
+    nameCell.dataset.label = 'Nombre';
+    const nameContent = document.createElement('div');
+    nameContent.textContent = lead.nombre || '—';
+    appendFamilySummary(nameContent, lead.familiares);
+    nameCell.append(nameContent);
+    row.append(nameCell);
 
     const emailCell = document.createElement('td');
     emailCell.dataset.label = 'Email';
@@ -432,6 +517,7 @@ form.addEventListener('submit', async (event) => {
         conversacion: form.elements.conversacion.value.trim(),
         disponibilidadTexto: disponibilidadTextoInput.value.trim(),
         disponibilidadResumen: availabilitySummaryDraft,
+        familiares: familyPayload(),
       }),
     });
     const result = await response.json();
@@ -453,6 +539,12 @@ form.addEventListener('submit', async (event) => {
 });
 
 refreshButton.addEventListener('click', loadLeads);
+familyToggle.addEventListener('change', () => {
+  showFamilyEditor(familyToggle.checked);
+  if (familyToggle.checked && !familyRows.children.length) addFamilyRow().focus();
+});
+familyRows.addEventListener('input', () => { familyChanged = true; });
+addFamilyButton.addEventListener('click', () => addFamilyRow().focus());
 gmailSyncButton.addEventListener('click', syncGmail);
 interpretAvailabilityButton.addEventListener('click', interpretAvailability);
 clearAvailabilitySummaryButton.addEventListener('click', () => {

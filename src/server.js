@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const path = require('path');
 const Database = require('better-sqlite3');
 const gmail = require('./gmail');
+const { createFamiliaresStore } = require('./familiares');
 const {
   AVAILABILITY_INTERPRETATION_INSTRUCTIONS,
   emptyAvailabilitySummary,
@@ -330,6 +331,8 @@ const opciones = {
   niveles: ['Iniciación', 'Intermedio', 'Avanzado'],
 };
 
+const familiaresStore = createFamiliaresStore(db, opciones.instrumentos);
+
 app.get('/options', (req, res) => {
   res.json(opciones);
 });
@@ -351,6 +354,7 @@ function serializeLead(row) {
     conversacion: row.conversacion,
     disponibilidadTexto: row.disponibilidad_texto,
     disponibilidadResumen: parseAvailabilitySummary(row.disponibilidad_resumen),
+    familiares: familiaresStore.list(row.id),
     creadoEn: row.creado_en,
     ultimoContactoEn: row.ultimo_contacto_en,
   };
@@ -361,7 +365,7 @@ function serializeLead(row) {
 const statements = {
   listLeads: db.prepare('SELECT * FROM leads ORDER BY id DESC'),
   exportLeads: db.prepare(`
-    SELECT nombre, email, estado, instrumento, nivel, asignado_a,
+    SELECT id, nombre, email, estado, instrumento, nivel, asignado_a,
       telefono, edad, edad_unidad, conversacion, disponibilidad_texto, disponibilidad_resumen, creado_en
     FROM leads
     ORDER BY COALESCE(ultimo_contacto_en, creado_en) DESC, id DESC
@@ -546,7 +550,7 @@ function escapeCsvValue(value) {
 app.get('/leads/export.csv', (req, res) => {
   const headers = [
     'Nombre', 'Email', 'Estado', 'Instrumento', 'Nivel', 'Asignado a',
-    'Teléfono', 'Edad', 'Disponibilidad', 'Conversación', 'Fecha de alta',
+    'Teléfono', 'Edad', 'Disponibilidad', 'Conversación', 'Fecha de alta', 'Familiares interesados',
   ];
   const rows = statements.exportLeads.all().map((lead) => [
     lead.nombre, lead.email, lead.estado, lead.instrumento, lead.nivel,
@@ -558,6 +562,9 @@ app.get('/leads/export.csv', (req, res) => {
     lead.disponibilidad_texto,
     lead.conversacion,
     lead.creado_en,
+    familiaresStore.list(lead.id).map(({ nombre, edad, instrumento }) =>
+      ['Familiar: ' + nombre, edad == null ? '' : `${edad} años`, instrumento].filter(Boolean).join(' · ')
+    ).join('\n'),
   ]);
   const csv = [headers, ...rows]
     .map((row) => row.map(escapeCsvValue).join(','))
@@ -576,6 +583,18 @@ app.get('/leads/export.csv', (req, res) => {
     .set('Content-Type', 'text/csv; charset=utf-8')
     .set('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`)
     .send(`\uFEFF${csv}\r\n`);
+});
+
+const createLeadWithFamiliares = db.transaction((lead, familiares) => {
+  const { lastInsertRowid } = statements.insertLead.run(lead);
+  familiaresStore.save(lastInsertRowid, familiares);
+  return serializeLead(statements.findLead.get(lastInsertRowid));
+});
+
+const updateLeadWithFamiliares = db.transaction((lead, familiares) => {
+  statements.updateLead.run(lead);
+  familiaresStore.save(lead.id, familiares);
+  return serializeLead(statements.findLead.get(lead.id));
 });
 
 app.post('/leads', (req, res) => {
@@ -619,6 +638,8 @@ app.post('/leads', (req, res) => {
   if (edad !== undefined && (!Number.isInteger(edad) || edad < 0)) {
     return res.status(400).json({ error: 'El campo edad debe ser un número entero igual o mayor que 0.' });
   }
+  const familiaresError = familiaresStore.validate(body.familiares);
+  if (familiaresError) return res.status(400).json({ error: familiaresError });
 
   // Se normalizan los valores antes de insertarlos para que los datos
   // almacenados tengan siempre el mismo formato, incluso sin frontend.
@@ -639,9 +660,7 @@ app.post('/leads', (req, res) => {
 
   // SQLite genera el identificador autonumérico; después se devuelve la fila
   // completa para que la respuesta conserve el contrato anterior.
-  const result = statements.insertLead.run(lead);
-  const savedLead = statements.findLead.get(result.lastInsertRowid);
-  res.status(201).json(serializeLead(savedLead));
+  res.status(201).json(createLeadWithFamiliares(lead, body.familiares));
 });
 
 function validateLead(body) {
@@ -688,9 +707,11 @@ app.put('/leads/:id', (req, res) => {
 
   const error = validateLead(req.body);
   if (error) return res.status(400).json({ error });
+  const familiaresError = familiaresStore.validate(req.body.familiares, id);
+  if (familiaresError) return res.status(400).json({ error: familiaresError });
 
   // La edición actualiza todos los campos editables y conserva id y fecha.
-  statements.updateLead.run({
+  const savedLead = updateLeadWithFamiliares({
     id,
     nombre: req.body.nombre.trim(),
     estado: req.body.estado || 'No contesta',
@@ -703,8 +724,8 @@ app.put('/leads/:id', (req, res) => {
     conversacion: req.body.conversacion?.trim() ?? '',
     disponibilidadTexto: normaliseAvailabilityText(req.body.disponibilidadTexto),
     disponibilidadResumen: JSON.stringify(normaliseAvailabilitySummary(req.body.disponibilidadResumen)),
-  });
-  res.json(serializeLead(statements.findLead.get(id)));
+  }, req.body.familiares);
+  res.json(savedLead);
 });
 
 app.delete('/leads/:id', (req, res) => {
@@ -714,8 +735,9 @@ app.delete('/leads/:id', (req, res) => {
 
   // Se consulta antes de borrar para poder devolver el lead eliminado,
   // igual que hacía el endpoint original basado en memoria.
+  const deletedLead = serializeLead(lead);
   statements.deleteLead.run(id);
-  res.json(serializeLead(lead));
+  res.json(deletedLead);
 });
 
 function startOfCurrentWeek() {

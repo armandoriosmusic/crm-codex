@@ -77,16 +77,44 @@
               <span>Nivel</span>
               <select id="nivel" name="nivel"><option value="">Seleccionar nivel</option></select>
             </label>
-            <div class="field field-wide availability-field">
-              <span>Disponibilidad</span>
-              <textarea id="disponibilidad-texto" name="disponibilidadTexto" rows="2" maxlength="1000" placeholder="Ej.: lunes y miércoles desde las 17:30; martes y jueves no puede"></textarea>
-              <div class="availability-actions">
-                <button id="interpret-availability-button" class="button-secondary" type="button">✦ Interpretar disponibilidad</button>
-                <button id="clear-availability-summary-button" class="button-text" type="button" hidden>Quitar resumen</button>
+            <div class="availability-family">
+              <div class="field availability-field">
+                <span>Disponibilidad</span>
+                <textarea id="disponibilidad-texto" name="disponibilidadTexto" rows="2" maxlength="1000" placeholder="Ej.: lunes y miércoles desde las 17:30; martes y jueves no puede"></textarea>
+                <div class="availability-actions">
+                  <button id="interpret-availability-button" class="button-secondary" type="button">✦ Interpretar disponibilidad</button>
+                  <button id="clear-availability-summary-button" class="button-text" type="button" hidden>Quitar resumen</button>
+                </div>
+                <div id="availability-preview" class="availability-preview" hidden aria-live="polite"></div>
+                <p id="availability-message" class="availability-message" role="status"></p>
               </div>
-              <div id="availability-preview" class="availability-preview" hidden aria-live="polite"></div>
-              <p id="availability-message" class="availability-message" role="status"></p>
+              <label class="family-toggle">
+                <input id="family-toggle" type="checkbox" aria-controls="family-editor">
+                Hay más familiares interesados
+              </label>
             </div>
+            <fieldset id="family-editor" class="family-editor" hidden disabled>
+              <legend>Familiares interesados</legend>
+              <div id="family-rows"></div>
+              <button id="add-family-member" class="button-secondary" type="button">Añadir familiar</button>
+            </fieldset>
+            <template id="family-row-template">
+              <div class="family-row">
+                <label class="field">
+                  <span>Nombre</span>
+                  <input name="familiarNombre" type="text" maxlength="120">
+                </label>
+                <label class="field">
+                  <span>Edad (años)</span>
+                  <input name="familiarEdad" type="number" min="0" step="1">
+                </label>
+                <label class="field">
+                  <span>Instrumento de interés</span>
+                  <select name="familiarInstrumento"><option value="">Sin concretar</option></select>
+                </label>
+                <button class="button-text" type="button" aria-label="Quitar familiar">Quitar</button>
+              </div>
+            </template>
             <label class="field">
               <span>Asignado a</span>
               <input id="asignadoA" name="asignadoA" type="text" placeholder="Persona responsable">
