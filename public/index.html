@@ -121,7 +121,12 @@
             </template>
             <label class="field">
               <span>Asignado a</span>
-              <input id="asignadoA" name="asignadoA" type="text" placeholder="Persona responsable">
+              <select id="asignadoA" name="asignadoA" aria-describedby="asignacion-anterior">
+                <option value="">Sin asignar</option>
+                <option value="Armando">Armando</option>
+                <option value="Humbe">Humbe</option>
+              </select>
+              <small id="asignacion-anterior" hidden></small>
             </label>
             <label class="field">
               <span>Teléfono</span>

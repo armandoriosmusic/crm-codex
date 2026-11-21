@@ -4,6 +4,8 @@ const emailInput = document.querySelector('#email');
 const estadoInput = document.querySelector('#estado');
 const instrumentoInput = document.querySelector('#instrumento');
 const nivelInput = document.querySelector('#nivel');
+const assigneeInput = document.querySelector('#asignadoA');
+const legacyAssigneeHint = document.querySelector('#asignacion-anterior');
 const disponibilidadTextoInput = document.querySelector('#disponibilidad-texto');
 const interpretAvailabilityButton = document.querySelector('#interpret-availability-button');
 const clearAvailabilitySummaryButton = document.querySelector('#clear-availability-summary-button');
@@ -47,6 +49,7 @@ const leadStatValues = {
   perdido: document.querySelector('#stat-perdido'),
 };
 let editingLeadId = null;
+let legacyAssignee = '';
 let allLeads = [];
 let availabilitySummaryDraft = emptyAvailabilitySummary();
 let familyChanged = false;
@@ -279,6 +282,20 @@ function showLogin(message = '') {
   loginUsername.focus();
 }
 
+function setAssignee(value = '') {
+  assigneeInput.value = value;
+  legacyAssignee = assigneeInput.selectedIndex === -1 ? value : '';
+  if (legacyAssignee) assigneeInput.value = '';
+  updateAssigneeHint();
+}
+
+function updateAssigneeHint() {
+  const showPrevious = legacyAssignee && !assigneeInput.value;
+  legacyAssigneeHint.textContent = showPrevious ? `Se conserva la asignación actual: ${legacyAssignee}` : '';
+  legacyAssigneeHint.hidden = !showPrevious;
+  assigneeInput.options[0].textContent = legacyAssignee ? 'Conservar asignación actual' : 'Sin asignar';
+}
+
 function startEditing(lead) {
   editingLeadId = lead.id;
   formTitle.textContent = 'Editar lead';
@@ -287,7 +304,7 @@ function startEditing(lead) {
   estadoInput.value = lead.estado || 'No contesta';
   instrumentoInput.value = lead.instrumento || '';
   nivelInput.value = lead.nivel || '';
-  form.elements.asignadoA.value = lead.asignadoA || '';
+  setAssignee(lead.asignadoA || '');
   form.elements.telefono.value = lead.telefono || '';
   form.elements.edad.value = lead.edad ?? '';
   form.elements.conversacion.value = lead.conversacion || '';
@@ -306,6 +323,7 @@ function startEditing(lead) {
 function cancelEditing() {
   editingLeadId = null;
   form.reset();
+  setAssignee();
   formTitle.textContent = 'Añadir un lead';
   submitButton.innerHTML = 'Guardar lead <span aria-hidden="true">↗</span>';
   cancelEditButton.hidden = true;
@@ -516,7 +534,7 @@ form.addEventListener('submit', async (event) => {
         estado: estadoInput.value,
         instrumento: instrumentoInput.value || undefined,
         nivel: nivelInput.value || undefined,
-        asignadoA: form.elements.asignadoA.value.trim(),
+        asignadoA: assigneeInput.value || legacyAssignee,
         telefono: form.elements.telefono.value.trim(),
         edad: form.elements.edad.value === '' ? undefined : Number(form.elements.edad.value),
         conversacion: form.elements.conversacion.value.trim(),
@@ -544,6 +562,7 @@ form.addEventListener('submit', async (event) => {
 });
 
 refreshButton.addEventListener('click', loadLeads);
+assigneeInput.addEventListener('change', updateAssigneeHint);
 familyToggle.addEventListener('change', () => {
   showFamilyEditor(familyToggle.checked);
   if (familyToggle.checked && !familyRows.children.length) addFamilyRow().focus();
