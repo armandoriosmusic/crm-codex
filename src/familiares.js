@@ -1,4 +1,4 @@
-function createFamiliaresStore(db, instrumentos) {
+function createFamiliaresStore(db, instrumentos, niveles) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS lead_familiares (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -6,24 +6,29 @@ function createFamiliaresStore(db, instrumentos) {
       nombre TEXT NOT NULL,
       edad INTEGER,
       instrumento TEXT,
+      nivel TEXT,
       creado_en TEXT NOT NULL,
       actualizado_en TEXT NOT NULL,
       retirado_en TEXT
     );
     CREATE INDEX IF NOT EXISTS lead_familiares_lead_id ON lead_familiares(lead_id);
   `);
+  const columns = db.prepare('PRAGMA table_info(lead_familiares)').all();
+  if (!columns.some(({ name }) => name === 'nivel')) {
+    db.exec('ALTER TABLE lead_familiares ADD COLUMN nivel TEXT');
+  }
 
   const list = db.prepare(`
-    SELECT id, nombre, edad, instrumento FROM lead_familiares
+    SELECT id, nombre, edad, instrumento, nivel FROM lead_familiares
     WHERE lead_id = ? AND retirado_en IS NULL ORDER BY id
   `);
   const insert = db.prepare(`
-    INSERT INTO lead_familiares (lead_id, nombre, edad, instrumento, creado_en, actualizado_en)
-    VALUES (@leadId, @nombre, @edad, @instrumento, @ahora, @ahora)
+    INSERT INTO lead_familiares (lead_id, nombre, edad, instrumento, nivel, creado_en, actualizado_en)
+    VALUES (@leadId, @nombre, @edad, @instrumento, @nivel, @ahora, @ahora)
   `);
   const update = db.prepare(`
     UPDATE lead_familiares SET nombre = @nombre, edad = @edad,
-      instrumento = @instrumento, actualizado_en = @ahora
+      instrumento = @instrumento, nivel = @nivel, actualizado_en = @ahora
     WHERE lead_id = @leadId AND id = @id
   `);
   const retire = db.prepare(`
@@ -46,6 +51,9 @@ function createFamiliaresStore(db, instrumentos) {
       if (familiar.instrumento != null && familiar.instrumento !== '' && !instrumentos.includes(familiar.instrumento)) {
         return `${label}: selecciona un instrumento de la lista.`;
       }
+      if (familiar.nivel != null && familiar.nivel !== '' && !niveles.includes(familiar.nivel)) {
+        return `${label}: selecciona un nivel de la lista.`;
+      }
       if (familiar.id !== undefined && !existing.delete(familiar.id)) {
         return `${label}: el registro no está disponible en esta ficha. Actualiza la lista y vuelve a editar.`;
       }
@@ -58,13 +66,18 @@ function createFamiliaresStore(db, instrumentos) {
     if (familiares === undefined) return;
     const previous = new Map(list.all(leadId).map((entry) => [entry.id, entry]));
     const ahora = new Date().toISOString();
-    for (const { id, nombre, edad, instrumento } of familiares) {
-      const values = { id, leadId, nombre: nombre.trim(), edad: edad ?? null, instrumento: instrumento || null, ahora };
+    for (const { id, nombre, edad, instrumento, nivel } of familiares) {
+      const original = previous.get(id);
+      const values = {
+        id, leadId, nombre: nombre.trim(), edad: edad ?? null, instrumento: instrumento || null,
+        nivel: nivel === undefined ? original?.nivel ?? null : nivel || null,
+        ahora,
+      };
       if (id === undefined) {
         insert.run(values);
       } else {
-        const original = previous.get(id);
-        if (original.nombre !== values.nombre || original.edad !== values.edad || original.instrumento !== values.instrumento) {
+        if (original.nombre !== values.nombre || original.edad !== values.edad
+          || original.instrumento !== values.instrumento || original.nivel !== values.nivel) {
           update.run(values);
         }
         previous.delete(id);

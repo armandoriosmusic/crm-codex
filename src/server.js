@@ -331,7 +331,7 @@ const opciones = {
   niveles: ['Iniciación', 'Intermedio', 'Avanzado'],
 };
 
-const familiaresStore = createFamiliaresStore(db, opciones.instrumentos);
+const familiaresStore = createFamiliaresStore(db, opciones.instrumentos, opciones.niveles);
 
 app.get('/options', (req, res) => {
   res.json(opciones);
@@ -562,8 +562,8 @@ app.get('/leads/export.csv', (req, res) => {
     lead.disponibilidad_texto,
     lead.conversacion,
     lead.creado_en,
-    familiaresStore.list(lead.id).map(({ nombre, edad, instrumento }) =>
-      ['Familiar: ' + nombre, edad == null ? '' : `${edad} años`, instrumento].filter(Boolean).join(' · ')
+    familiaresStore.list(lead.id).map(({ nombre, edad, instrumento, nivel }) =>
+      ['Familiar: ' + nombre, edad == null ? '' : `${edad} años`, instrumento, nivel].filter(Boolean).join(' · ')
     ).join('\n'),
   ]);
   const csv = [headers, ...rows]

@@ -63,12 +63,16 @@ function addFamilyRow(familiar = {}) {
   const name = row.querySelector('[name="familiarNombre"]');
   const age = row.querySelector('[name="familiarEdad"]');
   const instrument = row.querySelector('[name="familiarInstrumento"]');
-  for (const option of instrumentoInput.options) {
-    if (option.value) instrument.append(option.cloneNode(true));
+  const level = row.querySelector('[name="familiarNivel"]');
+  for (const [source, target] of [[instrumentoInput, instrument], [nivelInput, level]]) {
+    for (const option of source.options) {
+      if (option.value) target.append(option.cloneNode(true));
+    }
   }
   name.value = familiar.nombre ?? '';
   age.value = familiar.edad ?? '';
   instrument.value = familiar.instrumento ?? '';
+  level.value = familiar.nivel ?? '';
   row.querySelector('button').addEventListener('click', () => {
     row.remove();
     familyChanged = true;
@@ -99,14 +103,15 @@ function familyPayload() {
       nombre: row.querySelector('[name="familiarNombre"]').value.trim(),
       edad: edad === '' ? null : Number(edad),
       instrumento: row.querySelector('[name="familiarInstrumento"]').value || null,
+      nivel: row.querySelector('[name="familiarNivel"]').value || null,
     };
-  }).filter(({ id, nombre, edad, instrumento }) => id !== undefined || nombre || edad !== null || instrumento);
+  }).filter(({ id, nombre, edad, instrumento, nivel }) => id !== undefined || nombre || edad !== null || instrumento || nivel);
 }
 
 function appendFamilySummary(cell, familiares = []) {
   if (!familiares.length) return;
-  const format = ({ nombre, edad, instrumento }) =>
-    [nombre, edad == null ? '' : `${edad} años`, instrumento].filter(Boolean).join(' · ');
+  const format = ({ nombre, edad, instrumento, nivel }) =>
+    [nombre, edad == null ? '' : `${edad} años`, instrumento, nivel].filter(Boolean).join(' · ');
   const extra = familiares.length - 1;
   const details = document.createElement('details');
   details.className = 'family-summary';
